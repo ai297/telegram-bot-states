@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Telegram.Bot.Types;
-using Telegram.Bot.Types.Enums;
 
 namespace Telegram.Bot.States;
 
@@ -21,9 +20,6 @@ internal class StateSetupService(ITelegramBotClient botClient,
         var menuButton = getMenuButton != null
             ? getMenuButton(update.User.LanguageCode ?? defaultLanguageCode)
             : new MenuButtonDefault();
-
-        if (menuButton.Type == MenuButtonType.WebApp)
-            return botClient.SetChatMenuButtonAsync(update.User.Id, menuButton);
 
         var scope = BotCommandScope.Chat(chatState.ChatId);
         var hasMultiLanguageSupport = allLanguageCodes.Count > 1;
