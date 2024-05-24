@@ -17,14 +17,16 @@ internal class StateSetupService(ITelegramBotClient botClient,
 {
     public Task Setup(ChatState chatState, ChatUpdate update)
     {
+        var hasNoCommands = commandDescriptions == null || commandDescriptions.Count == 0;
+
         var menuButton = getMenuButton != null
             ? getMenuButton(update.User.LanguageCode ?? defaultLanguageCode)
-            : new MenuButtonDefault();
+            : (hasNoCommands ? new MenuButtonDefault() : new MenuButtonCommands());
 
         var scope = BotCommandScope.Chat(chatState.ChatId);
         var hasMultiLanguageSupport = allLanguageCodes.Count > 1;
 
-        if (commandDescriptions == null || commandDescriptions.Count == 0)
+        if (hasNoCommands)
         {
             logger.LogDebug(
                 "There are no commands descriptions for state '{stateName}'. Commands menu for chat " +
@@ -45,7 +47,7 @@ internal class StateSetupService(ITelegramBotClient botClient,
             "Commands menu for chat '{chatId}' will be updated for state '{stateName}'...",
             chatState.ChatId, chatState.StateName);
 
-        var groupedCommands = commandDescriptions
+        var groupedCommands = commandDescriptions!
             .Where(c => c.IsApplicable(update, chatState))
             .GroupBy(c => c.LanguageCode, StringComparer.OrdinalIgnoreCase);
 
