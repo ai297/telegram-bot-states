@@ -53,8 +53,7 @@ public static class StateResults
         : CompleteResult
     {
         public override ChatState GetResultState(ChatUpdate _, ChatState state)
-            => state.NewState(stateName).WithLabels(labels).AddOrUpdateLabel(
-                Constants.StateChangedKey, state.StateName);
+            => state.NewState(stateName).WithLabels(labels);
     }
 
     internal class ContinueWithStepResult(string? stepKey) : ContinueResult

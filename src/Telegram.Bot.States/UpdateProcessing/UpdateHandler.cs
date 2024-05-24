@@ -76,6 +76,8 @@ internal class UpdateHandler(
                         $"State processor for state '{processingStateName}' has return a new state '{state.StateName}' " +
                         $"with chat id '{state.ChatId}' which is not matching chat id for processing update " +
                         $"('{chatUpdate.Chat.Id}'). New state has not been saved.");
+
+                state.AddOrUpdateLabel(Constants.StateChangedKey, processingStateName);
             }
             while (state.StateName != processingStateName);
 
@@ -88,6 +90,13 @@ internal class UpdateHandler(
 
             if (state.StateName != initialStateName)
                 await SetupNewState(state, chatUpdate, scope.ServiceProvider);
+        }
+        catch (InvalidProgramException ex)
+        {
+            logger.LogCritical(ex,
+                "Processing of update '{updateType}' for user {userId} failed " +
+                "because the program has been developed with mistakes. '{exceptionType}': {message}",
+                update.Type, user.Id, TypeHelper.GetShortName(ex.GetType()), ex.Message);
         }
         catch (Exception ex)
         {
@@ -114,7 +123,7 @@ internal class UpdateHandler(
             : serviceProvider.GetKeyedService<IStateProcessor>(state.StateName.AsStateKey());
 
         if (stateProcessor == null)
-            throw new InvalidOperationException($"Processor for state '{state.StateName}' is not configured.");
+            throw new InvalidProgramException($"Processor for state '{state.StateName}' is not configured.");
 
         return stateProcessor.Process(update, state);
     }

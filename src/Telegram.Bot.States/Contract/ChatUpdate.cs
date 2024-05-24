@@ -18,6 +18,7 @@ public class ChatUpdate(User user, Chat chat, Update update)
 
     public ChatId ChatId => _chatId ??= Chat;
     public string MessageText => Update.Message?.Text ?? string.Empty;
+    public int? MessageId => Update.Message?.MessageId;
     public string CallbackData => Update.CallbackQuery?.Data ?? string.Empty;
     public bool IsPrivateChat => Chat.Type == ChatType.Private;
     public string CommandData => _commandData ??= GetCommandData();
