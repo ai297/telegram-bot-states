@@ -12,7 +12,7 @@ public sealed class StatesConfiguration
     private readonly ICollection<string> commandLanguages;
     private readonly string defaultLanguageCode;
 
-    internal StatesConfiguration(IServiceCollection services,
+    public StatesConfiguration(IServiceCollection services,
         ICollection<string> commandLanguages,
         string defaultLanguageCode)
     {
@@ -21,7 +21,7 @@ public sealed class StatesConfiguration
         this.defaultLanguageCode = defaultLanguageCode;
     }
 
-    public StatesConfiguration AddState<TData>(string name, Action<StateBuilder<TData>> configureState)
+    public StatesConfiguration ConfigureState<TData>(string name, Action<StateBuilder<TData>> configureState)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(configureState);
@@ -39,10 +39,10 @@ public sealed class StatesConfiguration
         return this;
     }
 
-    public StatesConfiguration AddState(string name, Action<StateBuilder<ChatUpdate>> configureState)
-        => AddState<ChatUpdate>(name, configureState);
+    public StatesConfiguration ConfigureState(string name, Action<StateBuilder<ChatUpdate>> configureState)
+        => ConfigureState<ChatUpdate>(name, configureState);
 
-    public StatesConfiguration AddDefaultState<TData>(Action<StateBuilder<TData>> configureState)
+    public StatesConfiguration ConfigureDefaultState<TData>(Action<StateBuilder<TData>> configureState)
     {
         ArgumentNullException.ThrowIfNull(configureState);
 
@@ -58,8 +58,8 @@ public sealed class StatesConfiguration
         return this;
     }
 
-    public StatesConfiguration AddDefaultState(Action<StateBuilder<ChatUpdate>> configureState)
-        => AddDefaultState<ChatUpdate>(configureState);
+    public StatesConfiguration ConfigureDefaultState(Action<StateBuilder<ChatUpdate>> configureState)
+        => ConfigureDefaultState<ChatUpdate>(configureState);
 
     #region Default data provider
 

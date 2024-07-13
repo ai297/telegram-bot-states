@@ -1,6 +1,6 @@
 namespace Telegram.Bot.States;
 
-public interface ICommand<in TParams, out TResult>
+public interface ICommand<in TCtx, out TResult>
 {
-    TResult Execute(TParams parameters);
+    TResult Execute(TCtx context);
 }
