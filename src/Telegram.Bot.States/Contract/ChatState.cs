@@ -14,13 +14,15 @@ public class ChatState
 
     public IReadOnlyDictionary<string, string?> Labels => labels;
     public bool IsDefault => string.Equals(StateName, Constants.DefaultStateName, StringComparison.OrdinalIgnoreCase);
+    public readonly bool IsChanged;
 
-    public ChatState(long chatId, string stateName)
+    public ChatState(long chatId, string stateName, bool isChanged = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stateName);
 
         ChatId = chatId;
         StateName = stateName;
+        IsChanged = isChanged;
         labels = emptyLabels;
     }
 
@@ -62,8 +64,6 @@ public class ChatState
 
         return this;
     }
-
-    public ChatState NewState(string stateName) => new ChatState(ChatId, stateName);
 
     public static ChatState Default(long chatId) => new(chatId, Constants.DefaultStateName);
 }

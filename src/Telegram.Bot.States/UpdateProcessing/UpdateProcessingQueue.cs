@@ -25,10 +25,7 @@ internal class UpdateProcessingQueue : IUpdateProcessingQueue
         }
 
         var currentUpateSource = new TaskCompletionSource();
-        var removeTask = new Task(() => {
-            Task.Delay(QueueLifeTime).Wait();
-            RemoveIfEmpty(chatId);
-        });
+        var removeTask = Task.Delay(QueueLifeTime).ContinueWith(_ => RemoveIfEmpty(chatId));
 
         Task previousProcessingTask;
 
@@ -40,8 +37,6 @@ internal class UpdateProcessingQueue : IUpdateProcessingQueue
 
             chatProcessingQueue.Enqueue(Task.WhenAny(currentUpateSource.Task, removeTask));
         }
-
-        removeTask.Start();
 
         return new(currentUpateSource.SetResult, previousProcessingTask);
     }

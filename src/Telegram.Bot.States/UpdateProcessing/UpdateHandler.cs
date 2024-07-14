@@ -76,19 +76,15 @@ internal class UpdateHandler(
                         $"State processor for state '{processingStateName}' has return a new state '{state.StateName}' " +
                         $"with chat id '{state.ChatId}' which is not matching chat id for processing update " +
                         $"('{chatUpdate.Chat.Id}'). New state has not been saved.");
-
-                state.AddOrUpdateLabel(Constants.StateChangedKey, processingStateName);
             }
-            while (state.StateName != processingStateName);
-
-            state.RemoveLabel(Constants.StateChangedKey);
+            while (state.IsChanged || state.StateName != processingStateName);
 
             if (state.IsDefault && state.Labels.Count == 0)
                 await stateStorage.Delete(state.ChatId);
             else
                 await stateStorage.AddOrUpdate(state);
 
-            if (state.StateName != initialStateName)
+            if (state.IsChanged || state.StateName != initialStateName)
                 await SetupNewState(state, chatUpdate, scope.ServiceProvider);
         }
         catch (InvalidProgramException ex)

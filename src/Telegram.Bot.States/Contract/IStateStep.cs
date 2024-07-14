@@ -1,5 +1,5 @@
 namespace Telegram.Bot.States;
 
-public interface IStateStep<TData> : IAsyncCommand<StateContext<TData>, IStateResult> { }
-
-public interface IStateStep : IAsyncCommand<StateContext, IStateResult> { }
+public interface IStateStep<TCtx> : IAsyncCommand<TCtx, IStateResult> where TCtx : StateContext
+{
+}

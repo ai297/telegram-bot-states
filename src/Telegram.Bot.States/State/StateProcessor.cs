@@ -1,37 +1,28 @@
-using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Telegram.Bot.States;
 
-internal class StateProcessor<TData>(
-    IStateDataProvider<TData> dataProvider,
-    IStateActionsProvider<TData> actionsProvider,
-    IStateStepsCollection<TData> stepsCollection,
-    IAsyncCommand<StateContext<TData>, IStateResult>? defaultAction,
-    IServiceProvider serviceProvider)
-    : IStateProcessor
+internal class StateProcessor<TCtx>(
+    IStateContextFactory<TCtx> contextFactory,
+    IStateActionsProvider actionsProvider,
+    IStateStepsCollection<TCtx> stepsCollection,
+    IAsyncCommand<TCtx, IStateResult>? defaultAction,
+    ILogger<IStateProcessor> logger)
+    : IStateProcessor where TCtx : StateContext
 {
     private static readonly IStateResult AllStepsCompleted = StateResults.Complete(
         new KeyValuePair<string, string?>(Constants.StateStepKey, Constants.AllStepsCompletedLabel));
 
-    private readonly Lazy<ITelegramBotClient> botClientLazy = new(() => serviceProvider
-        .GetRequiredService<ITelegramBotClient>());
-
-    private readonly ILogger<StateProcessor<TData>> logger = serviceProvider
-        .GetRequiredService<ILogger<StateProcessor<TData>>>();
-
     public async Task<ChatState> Process(ChatUpdate update, ChatState currentState)
     {
-        var isStateNotChanged = !currentState.Labels.ContainsKey(Constants.StateChangedKey);
-        var data = await dataProvider.Get(update);
+        var context = await contextFactory.Create(update, currentState);
         var resultState = currentState;
         IStateResult processingResult;
 
         // first - process commands or other actions
-        if (isStateNotChanged)
+        if (!currentState.IsChanged)
         {
             var action = actionsProvider.GetAction(update, currentState);
 
@@ -40,7 +31,7 @@ internal class StateProcessor<TData>(
                 logger.LogDebug("Process action for chat '{chatId}' in state '{stateName}'...",
                     update.Chat.Id, currentState.StateName);
 
-                processingResult = await action.Execute(new StateContext<TData>(data, update, currentState, botClientLazy));
+                processingResult = await action.Execute(context);
                 resultState = processingResult.GetResultState(update, resultState);
 
                 if (processingResult.Complete) return resultState;
@@ -61,21 +52,19 @@ internal class StateProcessor<TData>(
             logger.LogDebug("Process step '{stepKey}' for chat '{chatId}' in state '{stateName}'...",
                 stepKey, update.Chat.Id, currentState.StateName);
 
-            processingResult = await ProcessStep(data, update, currentState, stepKey);
+            processingResult = await ProcessStep(context, stepKey);
             resultState = processingResult.GetResultState(update, resultState);
 
             if (processingResult.Complete) return resultState;
         }
 
         // and last - process default action
-        if (defaultAction is not null && isStateNotChanged)
+        if (defaultAction is not null && !currentState.IsChanged)
         {
             logger.LogDebug("Process default action for chat '{chatId}' in state '{stateName}'...",
                 update.Chat.Id, currentState.StateName);
 
-            processingResult = await defaultAction.Execute(
-                new StateContext<TData>(data, update, currentState, botClientLazy));
-
+            processingResult = await defaultAction.Execute(context);
             resultState = processingResult.GetResultState(update, resultState);
         }
 
@@ -86,7 +75,7 @@ internal class StateProcessor<TData>(
         => state.Labels.TryGetValue(Constants.StateStepKey, out stepKey)
         || (stepKey = stepsCollection.GetFirstStepKey()) != null;
 
-    private async Task<IStateResult> ProcessStep(TData data, ChatUpdate update, ChatState state, string? stepKey)
+    private async Task<IStateResult> ProcessStep(TCtx context, string? stepKey)
     {
         if (stepKey == Constants.AllStepsCompletedLabel)
             return StateResults.Continue();
@@ -94,7 +83,7 @@ internal class StateProcessor<TData>(
         if (string.IsNullOrWhiteSpace(stepKey))
         {
             logger.LogDebug("All steps in state {stateName} for chat '{chatId}' has been completed.",
-                state.StateName, update.Chat.Id);
+                context.State.StateName, context.Update.Chat.Id);
 
             return AllStepsCompleted;
         }
@@ -106,21 +95,21 @@ internal class StateProcessor<TData>(
             logger.LogError(
                 "Can't find step '{stepKey}' for state '{stateName}'. State steps " +
                 "for chat '{chatId}' will be marked as all completed.",
-                stepKey, state.StateName, update.Chat.Id);
+                stepKey, context.State.StateName, context.Update.Chat.Id);
 
             return AllStepsCompleted;
         }
 
-        state.AddOrUpdateLabel(Constants.StateStepKey, stepKey);
-        var stepResult = await step.Execute(new StateContext<TData>(data, update, state, botClientLazy));
+        context.State.AddOrUpdateLabel(Constants.StateStepKey, stepKey);
+        var stepResult = await step.Execute(context);
 
         return stepResult switch
         {
             StateResults.CompleteWithNextStepResult completeResult
                 => completeResult.WithNextStepKey(stepsCollection.GetNextStepKey(stepKey)),
             StateResults.ContinueWithStepResult continueResult
-                => await ProcessStep(data, update, state, continueResult.StepKey),
-            { Complete: false } => await ProcessStep(data, update, state, stepsCollection.GetNextStepKey(stepKey)),
+                => await ProcessStep(context, continueResult.StepKey),
+            { Complete: false } => await ProcessStep(context, stepsCollection.GetNextStepKey(stepKey)),
             _ => stepResult,
         };
     }

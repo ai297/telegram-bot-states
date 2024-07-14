@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Telegram.Bot.Types;
 
 namespace Telegram.Bot.States;
 
@@ -61,12 +63,20 @@ public static class ServicesExtensions
                 serviceProvider.GetRequiredService<IOptions<BotConfiguration>>().Value.Token,
                 httpClient));
 
-        services.AddSingleton<IWebhookController, WebhookController>();
+        var statesConfiguration = new StatesConfiguration(services, commandLanguages, defaultLanguageCode);
+        var getMenuButton = new Lazy<Func<string, MenuButton>?>(() => statesConfiguration.MenuButtonFactory);
+
         services.AddSingleton<IUpdateHandler, UpdateHandler>();
         services.AddSingleton<IUpdateProcessingQueue, UpdateProcessingQueue>();
-        services.AddSingleton<IStateDataProvider<ChatUpdate>, DefaultStateDataProvider>();
+        services.AddTransient<IBotSetupService>(sp => new BotSetupService(
+            sp.GetRequiredService<ITelegramBotClient>(),
+            sp.GetService<ICommandDescriptions>(),
+            commandLanguages,
+            defaultLanguageCode,
+            sp.GetRequiredService<ILogger<BotSetupService>>(),
+            getMenuButton));
 
-        return new StatesConfiguration(services, commandLanguages, defaultLanguageCode);
+        return statesConfiguration;
     }
 
     private static void ThrowIfConfigured()

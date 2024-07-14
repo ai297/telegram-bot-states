@@ -32,28 +32,31 @@ public static class StateResults
     public static IStateResult CompleteWithNextStep()
         => new CompleteWithNextStepResult();
 
-    internal class CompleteResult(ICollection<KeyValuePair<string, string?>>? labels = null)
+    internal abstract class StateResult(ICollection<KeyValuePair<string, string?>>? labels)
         : IStateResult
     {
-        public bool Complete { get; } = true;
+        public virtual bool Complete => true;
         public virtual ChatState GetResultState(ChatUpdate _, ChatState state)
             => labels is null ? state : state.WithLabels(labels);
+    }
+
+    internal class CompleteResult(ICollection<KeyValuePair<string, string?>>? labels = null)
+        : StateResult(labels)
+    {
     }
 
     internal class ContinueResult(ICollection<KeyValuePair<string, string?>>? labels = null)
-        : IStateResult
+        : StateResult(labels)
     {
-        public bool Complete { get; } = false;
-        public virtual ChatState GetResultState(ChatUpdate _, ChatState state)
-            => labels is null ? state : state.WithLabels(labels);
+        public override bool Complete { get; } = false;
     }
 
     internal class ChangeStateResult(string stateName,
-        ICollection<KeyValuePair<string, string?>>? labels)
+        ICollection<KeyValuePair<string, string?>>? labels = null)
         : CompleteResult
     {
         public override ChatState GetResultState(ChatUpdate _, ChatState state)
-            => state.NewState(stateName).WithLabels(labels);
+            => new ChatState(state.ChatId, stateName, true).WithLabels(labels);
     }
 
     internal class ContinueWithStepResult(string? stepKey) : ContinueResult

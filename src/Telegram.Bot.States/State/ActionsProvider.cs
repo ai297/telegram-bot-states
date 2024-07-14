@@ -1,29 +1,36 @@
 using System;
-using System.Collections.ObjectModel;
-using System.Linq;
 
 namespace Telegram.Bot.States;
 
-internal class ActionsProvider<TData>(
-    StateActionsCollection<TData> actionsCollection,
+internal class ActionsProvider<TCtx>(
+    ICommandFactories<StateContext>? globalCommands,
+    ICommandFactories<TCtx>? stateCommands,
     IServiceProvider serviceProvider,
-    string stateName) : IStateActionsProvider<TData>
+    string stateName)
+    : IStateActionsProvider
+    where TCtx : StateContext
 {
-    private readonly ReadOnlyDictionary<string, StateCommandFactory<TData>> registeredCommands
-        = new(actionsCollection.Commands);
-
-    private readonly ReadOnlyCollection<StateCommandFactory<TData>> registeredActions
-        = new(actionsCollection.StateActions);
-
-    public IAsyncCommand<StateContext<TData>, IStateResult>? GetAction(ChatUpdate update, ChatState state)
+    public IAsyncCommand<StateContext, IStateResult>? GetAction(ChatUpdate update, ChatState state)
     {
         if (update.IsCommand)
         {
-            return registeredCommands.TryGetValue(update.Command, out var commandFactory) && commandFactory.IsApplicable(update, state)
-                ? commandFactory.Create(serviceProvider, stateName)
-                : null;
+            var command = GetCommandFactory(stateCommands, update, state)?.Create(serviceProvider, stateName)
+                ?? GetCommandFactory(globalCommands, update, state)?.Create(serviceProvider, stateName);
+
+            return command;
         }
 
-        return registeredActions.FirstOrDefault(af => af.IsApplicable(update, state))?.Create(serviceProvider, stateName);
+        //TODO: add callback queries
+        return null;
+    }
+
+    private static StateActionFactory<T>? GetCommandFactory<T>(ICommandFactories<T>? commands,
+        ChatUpdate update, ChatState state)
+        where T : StateContext
+    {
+        if (commands != null && commands.TryGetValue(update.Command, out var factory) && factory.IsApplicable(update, state))
+            return factory;
+
+        return null;
     }
 }

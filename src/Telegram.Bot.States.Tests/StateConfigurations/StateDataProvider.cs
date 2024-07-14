@@ -10,7 +10,7 @@ public class StateDataProvider
         // arrange
         var services = new ServiceCollection();
         new StatesConfiguration(services, [], "ru")
-            .AddDefaultDataProvider<TestStateData>(() => Task.FromResult(new TestStateData { Value = "My data" }));
+            .WithDefaultDataProvider<TestStateData>(() => Task.FromResult(new TestStateData { Value = "My data" }));
 
         var serviceProvider = services.BuildServiceProvider();
 

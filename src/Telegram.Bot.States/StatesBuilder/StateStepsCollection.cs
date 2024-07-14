@@ -8,11 +8,11 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Telegram.Bot.States;
 
-public sealed class StateStepsCollection<TData> : IEnumerable<StateStepCollectionItem<TData>>
+public sealed class StateStepsCollection<TCtx> : IEnumerable<StateStepCollectionItem<TCtx>> where TCtx : StateContext
 {
     private readonly string stateName;
     private readonly IServiceCollection services;
-    private readonly List<StateStepCollectionItem<TData>> steps = [];
+    private readonly List<StateStepCollectionItem<TCtx>> steps = [];
 
     internal StateStepsCollection(string stateName,
         IServiceCollection services)
@@ -21,42 +21,42 @@ public sealed class StateStepsCollection<TData> : IEnumerable<StateStepCollectio
         this.services = services;
     }
 
-    public StateStepsCollection<TData> AddStep<TStep>(StateServiceFactory<TStep> stepFactory, string? stepKey = null)
-        where TStep : IStateStep<TData>
+    public StateStepsCollection<TCtx> Add<TStep>(StateServiceFactory<TStep> stepFactory, string? stepKey = null)
+        where TStep : IStateStep<TCtx>
     {
         ArgumentNullException.ThrowIfNull(stepFactory);
 
         var stateName = this.stateName;
 
-        steps.Add(new StateStepCollectionItem<TData>(
+        steps.Add(new StateStepCollectionItem<TCtx>(
             GetStepKey(stepKey, typeof(TStep)),
             sp => stepFactory(sp, stateName)));
 
         return this;
     }
 
-    public StateStepsCollection<TData> AddStep<TStep>(string? stepKey = null)
-        where TStep : class, IStateStep<TData>
+    public StateStepsCollection<TCtx> Add<TStep>(string? stepKey = null)
+        where TStep : class, IStateStep<TCtx>
     {
         services.TryAddTransient<TStep>();
 
-        steps.Add(new StateStepCollectionItem<TData>(
+        steps.Add(new StateStepCollectionItem<TCtx>(
             GetStepKey(stepKey, typeof(TStep)),
             sp => sp.GetRequiredService<TStep>()));
 
         return this;
     }
 
-    public StateStepsCollection<TData> AddStep(Delegate @delegate, string? stepKey = null)
+    public StateStepsCollection<TCtx> Add(Delegate @delegate, string? stepKey = null)
     {
         var delegateFactory = DelegateHelper
-            .CreateDelegateFactory<IServiceProvider, Command<StateContext<TData>, Task<IStateResult>>>(
+            .CreateDelegateFactory<IServiceProvider, Command<TCtx, Task<IStateResult>>>(
                 @delegate, (provider, type) => provider.GetRequiredService(type));
 
-        Func<IServiceProvider, IAsyncCommand<StateContext<TData>, IStateResult>> stepFactory = serviceProvider =>
-            new AsyncDelegateCommand<StateContext<TData>, IStateResult>(delegateFactory(serviceProvider));
+        Func<IServiceProvider, IAsyncCommand<TCtx, IStateResult>> stepFactory = serviceProvider =>
+            new AsyncDelegateCommand<TCtx, IStateResult>(delegateFactory(serviceProvider));
 
-        steps.Add(new StateStepCollectionItem<TData>(GetStepKey(stepKey, @delegate.GetType()), stepFactory));
+        steps.Add(new StateStepCollectionItem<TCtx>(GetStepKey(stepKey, @delegate.GetType()), stepFactory));
 
         return this;
     }
@@ -76,6 +76,6 @@ public sealed class StateStepsCollection<TData> : IEnumerable<StateStepCollectio
     IEnumerator IEnumerable.GetEnumerator()
         => steps.GetEnumerator();
 
-    IEnumerator<StateStepCollectionItem<TData>> IEnumerable<StateStepCollectionItem<TData>>.GetEnumerator()
+    IEnumerator<StateStepCollectionItem<TCtx>> IEnumerable<StateStepCollectionItem<TCtx>>.GetEnumerator()
         => steps.GetEnumerator();
 }

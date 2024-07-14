@@ -9,6 +9,7 @@ namespace Telegram.Bot.States;
 internal class WebhookController(
     ITelegramBotClient botClient,
     IOptions<BotConfiguration> options,
+    IBotSetupService setupService,
     ILogger<WebhookController> logger)
     : IWebhookController
 {
@@ -31,6 +32,8 @@ internal class WebhookController(
             logger.LogError("Tg bot webhook cannot to be used because Token or HostAdress not configured.");
             return;
         }
+
+        await setupService.Setup();
 
         var certificate = !string.IsNullOrEmpty(config.CertificatePath)
             ? new InputFileStream(System.IO.File.OpenRead(config.CertificatePath))

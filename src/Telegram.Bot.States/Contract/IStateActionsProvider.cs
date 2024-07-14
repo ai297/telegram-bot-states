@@ -1,6 +1,6 @@
 namespace Telegram.Bot.States;
 
-public interface IStateActionsProvider<TCtx> where TCtx : StateContext
+public interface IStateActionsProvider
 {
-    IAsyncCommand<TCtx, IStateResult>? GetAction(ChatUpdate update, ChatState state);
+    IAsyncCommand<StateContext, IStateResult>? GetAction(ChatUpdate update, ChatState state);
 }
