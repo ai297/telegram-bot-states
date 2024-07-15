@@ -1,6 +1,6 @@
 namespace Telegram.Bot.States;
 
-public interface IStateStepsCollection<TCtx> where TCtx : StateContext
+public interface IStateStepsCollection<in TCtx> where TCtx : StateContext
 {
     IAsyncCommand<TCtx, IStateResult>? Get(string stepKey);
     string? GetFirstStepKey();

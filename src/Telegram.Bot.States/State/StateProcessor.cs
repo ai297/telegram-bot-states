@@ -8,7 +8,7 @@ internal class StateProcessor<TCtx>(
     IStateContextFactory<TCtx> contextFactory,
     IStateActionsProvider actionsProvider,
     IStateStepsCollection<TCtx> stepsCollection,
-    IAsyncCommand<TCtx, IStateResult>? defaultAction,
+    IAsyncCommand<StateContext, IStateResult>? defaultAction,
     ILogger<IStateProcessor> logger)
     : IStateProcessor where TCtx : StateContext
 {
@@ -28,7 +28,8 @@ internal class StateProcessor<TCtx>(
 
             if (action != null)
             {
-                logger.LogDebug("Process action for chat '{chatId}' in state '{stateName}'...",
+                logger.LogDebug("Process {actionType} for chat '{chatId}' in state '{stateName}'...",
+                    update.IsCommand ? "command" : (update.IsCallbackQuery ? "callback query" : "action"),
                     update.Chat.Id, currentState.StateName);
 
                 processingResult = await action.Execute(context);

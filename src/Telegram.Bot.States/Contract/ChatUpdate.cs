@@ -29,13 +29,14 @@ public class ChatUpdate(User user, Chat chat, Update update)
         ?? Update.ChannelPost?.MessageId
         ?? Update.EditedChannelPost?.MessageId;
 
-    public string CallbackData => Update.CallbackQuery?.Data ?? string.Empty;
+    public string CallbackData => Update.CallbackQuery?.Data ?? "";
     public bool IsPrivateChat => Chat.Type == ChatType.Private;
     public string CommandData => _commandData ??= GetCommandData();
     public string Command => _command ??= IsCommand
         ? MessageText!.Split(Constants.CommandSeparatorChars).First()[1..].ToLower()
         : "";
 
+    public bool IsCallbackQuery => Update.Type == UpdateType.CallbackQuery;
     public bool IsCommand => _isCommand
         ??= Update.Type == UpdateType.Message
         && MessageText!.StartsWith(Constants.CommandPrefix);

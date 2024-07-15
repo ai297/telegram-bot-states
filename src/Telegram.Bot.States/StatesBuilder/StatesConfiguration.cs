@@ -85,8 +85,10 @@ public sealed class StatesConfiguration(IServiceCollection services,
         return this;
     }
 
-    public StatesConfiguration WithMainCommands(Action<CommandsCollectionBuilder<StateContext>> configureCommands)
+    public StatesConfiguration ConfigureCommands(Action<CommandsCollectionBuilder<StateContext>> configureCommands)
     {
+        ArgumentNullException.ThrowIfNull(configureCommands);
+
         globalCommandsBuilder ??= new CommandsCollectionBuilder<StateContext>(services, commandLanguages);
         configureCommands(globalCommandsBuilder);
 
@@ -98,14 +100,32 @@ public sealed class StatesConfiguration(IServiceCollection services,
 
         if (globalCommandsBuilder.Factories.Count > 0)
         {
-            services.RemoveAll<ICommandFactories<StateContext>>();
-            services.AddSingleton<ICommandFactories<StateContext>>(new CommandFactories<StateContext>(globalCommandsBuilder.Factories));
+            services.RemoveAllKeyed<IActionFactoriesCollection>(Constants.GlobalCommandsServiceKey);
+            services.AddKeyedSingleton<IActionFactoriesCollection>(Constants.GlobalCommandsServiceKey,
+                new ActionFactoriesCollection<string, StateContext>(Constants.CommandKeySelector, globalCommandsBuilder.Factories));
         }
 
         return this;
     }
 
-    public StatesConfiguration WithMainWebAppButton(Func<string, (string text, string url)> getLocalizedButton)
+    public StatesConfiguration ConfigureCallbacks<TKey>(Func<ChatUpdate, TKey> keySelector,
+        Action<CallbacksCollectionBuilder<TKey, StateContext>> configureCallbacks)
+        where TKey : notnull
+    {
+        ArgumentNullException.ThrowIfNull(keySelector);
+        ArgumentNullException.ThrowIfNull(configureCallbacks);
+        ThrowIfCallbacksConfigured(services);
+
+        var callbacksBuilder = new CallbacksCollectionBuilder<TKey, StateContext>(services);
+        configureCallbacks(callbacksBuilder);
+
+        services.AddKeyedSingleton<IActionFactoriesCollection>(Constants.GlobalCallbackServiceKey,
+            new ActionFactoriesCollection<TKey, StateContext>(keySelector, callbacksBuilder.Factories));
+
+        return this;
+    }
+
+    public StatesConfiguration ConfigureWebAppButton(Func<string, (string text, string url)> getLocalizedButton)
     {
         ArgumentNullException.ThrowIfNull(getLocalizedButton);
 
@@ -121,7 +141,7 @@ public sealed class StatesConfiguration(IServiceCollection services,
         return this;
     }
 
-    public StatesConfiguration WithDefaultDataProvider<TData>(
+    public StatesConfiguration ConfigureDefaultDataProvider<TData>(
         Func<IServiceProvider, IStateDataProvider<TData>> factory)
     {
         ArgumentNullException.ThrowIfNull(factory);
@@ -131,7 +151,7 @@ public sealed class StatesConfiguration(IServiceCollection services,
         return this;
     }
 
-    public StatesConfiguration WithDefaultDataProvider<TData, TService>()
+    public StatesConfiguration ConfigureDefaultDataProvider<TData, TService>()
         where TService : class, IStateDataProvider<TData>
     {
         ThrowIfDataProviderAdded<TData>(services);
@@ -144,7 +164,7 @@ public sealed class StatesConfiguration(IServiceCollection services,
     /// Your <paramref name="@delegate" /> can receive <seealso cref="Telegram.Bot.States.ChatUpdate" />
     /// as parameter and  must return ValueTask&lt;<typeparamref name="TStateContext" />&rt; as result.
     /// </summary>
-    public StatesConfiguration WithDefaultDataProvider<TData>(Delegate @delegate)
+    public StatesConfiguration ConfigureDefaultDataProvider<TData>(Delegate @delegate)
     {
         var delegateFactory = DelegateHelper
             .CreateDelegateFactory<IServiceProvider, Func<ChatUpdate, Task<TData>>>(
@@ -153,7 +173,41 @@ public sealed class StatesConfiguration(IServiceCollection services,
         Func<IServiceProvider, IStateDataProvider<TData>> factory = serviceProvider =>
             new DelegateDataProvider<TData>(delegateFactory(serviceProvider));
         
-        return WithDefaultDataProvider(factory);
+        return ConfigureDefaultDataProvider(factory);
+    }
+
+    public StatesConfiguration ConfigureDefaultAction(Func<IServiceProvider, IStateStep<StateContext>> factory)
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+        ThrowIfDefaultActionRegistered(services);
+
+        services.AddTransient<IAsyncCommand<StateContext, IStateResult>>(factory);
+
+        return this;
+    }
+
+    public StatesConfiguration ConfigureDefaultAction(Delegate @delegate)
+    {
+        ArgumentNullException.ThrowIfNull(@delegate);
+        ThrowIfDefaultActionRegistered(services);
+
+        var delegateFactory = DelegateHelper
+            .CreateDelegateFactory<IServiceProvider, Command<StateContext, Task<IStateResult>>>(
+                @delegate, (serviceProvider, type) => serviceProvider.GetRequiredService(type));
+
+        services.AddTransient<IAsyncCommand<StateContext, IStateResult>>(
+            sp => new AsyncDelegateCommandLazy<StateContext, IStateResult>(sp, delegateFactory));
+
+        return this;
+    }
+
+    public StatesConfiguration ConfigureDefaultAction<T>()
+        where T : class, IStateStep<StateContext>
+    {
+        ThrowIfDefaultActionRegistered(services);
+        services.AddTransient<IAsyncCommand<StateContext, IStateResult>, T>();
+
+        return this;
     }
 
     private static void ThrowIfDataProviderAdded<TData>(IServiceCollection services)
@@ -168,12 +222,25 @@ public sealed class StatesConfiguration(IServiceCollection services,
         var stateKey = stateName.AsStateKey();
 
         if (services.Any(d => string.Equals(d.ServiceKey as string, stateKey) && d.ServiceType == typeof(IStateProcessor)))
-            throw new InvalidOperationException($"State '{stateName}' has already registered.");
+            throw new InvalidOperationException($"State '{stateName}' has already configured.");
     }
 
     private static void ThrowIfDefaultStateConfigured(IServiceCollection services)
     {
         if (services.Any(d => d.ServiceKey == null && d.ServiceType == typeof(IStateProcessor)))
-            throw new InvalidOperationException("Default state has already registered.");
+            throw new InvalidOperationException("Default state has already configured.");
+    }
+
+    private static void ThrowIfCallbacksConfigured(IServiceCollection services)
+    {
+        if (services.Any(d => d.ServiceType == typeof(IActionFactoriesCollection)
+            && string.Equals(Constants.GlobalCallbackServiceKey, d.ServiceKey)))
+            throw new InvalidOperationException("Callback query actions have been already configured.");
+    }
+
+    private static void ThrowIfDefaultActionRegistered(IServiceCollection services)
+    {
+        if (services.Any(d => d.ServiceType == typeof(IAsyncCommand<StateContext, IStateResult>)))
+            throw new InvalidOperationException("Default action has been already registered.");
     }
 }

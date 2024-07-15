@@ -9,26 +9,26 @@ namespace Telegram.Bot.States;
 
 public abstract class StateBuilderBase<TCtx> where TCtx : StateContext
 {
-    protected readonly string stateName;
     protected readonly ICollection<string> languageCodes;
     protected readonly bool isDefaultState;
 
     internal readonly IServiceCollection Services;
+    internal readonly string StateName;
 
     private CommandsCollectionBuilder<TCtx>? commandsCollectionBuilder = null;
     internal CommandsCollectionBuilder<TCtx> CommandsCollectionBuilder => commandsCollectionBuilder
-        ??= new CommandsCollectionBuilder<TCtx>(Services, languageCodes, stateName);
+        ??= new CommandsCollectionBuilder<TCtx>(Services, languageCodes, StateName);
 
     private StateStepsCollection<TCtx>? stepsCollection = null;
     internal StateStepsCollection<TCtx> StepsCollection => stepsCollection
-        ??= new StateStepsCollection<TCtx>(stateName, Services);
+        ??= new StateStepsCollection<TCtx>(StateName, Services);
 
     private Func<string, MenuButton>? menuButtonFactory = null;
     internal Func<string, MenuButton>? MenuButtonFactory
     {
         get => menuButtonFactory;
         set => menuButtonFactory = menuButtonFactory != null
-            ? throw new InvalidOperationException($"Menu button for state '{stateName}' has been already configured.")
+            ? throw new InvalidOperationException($"Menu button for state '{StateName}' has been already configured.")
             : value;
     }
 
@@ -37,7 +37,16 @@ public abstract class StateBuilderBase<TCtx> where TCtx : StateContext
     {
         get => defaultActionFactory;
         set => defaultActionFactory = defaultActionFactory != null
-            ? throw new InvalidOperationException($"Default action for state '{stateName}' has been already configured.")
+            ? throw new InvalidOperationException($"Default action for state '{StateName}' has been already configured.")
+            : value;
+    }
+
+    private IActionFactoriesCollection? callbackFactories = null;
+    internal IActionFactoriesCollection? CallbackFactories
+    {
+        get => callbackFactories;
+        set => callbackFactories = callbackFactories != null
+            ? throw new InvalidOperationException($"Callback query actions for state '{StateName}' has been already configured.")
             : value;
     }
 
@@ -47,24 +56,30 @@ public abstract class StateBuilderBase<TCtx> where TCtx : StateContext
         bool isDefaultState)
     {
         Services = services;
-        this.stateName = stateName;
+        StateName = stateName;
         this.languageCodes = languageCodes;
         this.isDefaultState = isDefaultState;
     }
 
     internal void BindProcessor()
     {
-        var stateCommandFactories = commandsCollectionBuilder != null && commandsCollectionBuilder.Factories.Count > 0
-            ? new CommandFactories<TCtx>(commandsCollectionBuilder.Factories)
+        var stateName = StateName;
+        var stateKey = isDefaultState ? null : stateName.AsStateKey();
+        var callbackFactories = CallbackFactories;
+        var commandFactories = commandsCollectionBuilder?.Factories != null && commandsCollectionBuilder.Factories.Count > 0
+            ? new ActionFactoriesCollection<string, TCtx>(Constants.CommandKeySelector, commandsCollectionBuilder.Factories)
             : null;
 
-        Func<IServiceProvider, IStateActionsProvider> actionsProviderFactory =
-            sp => new ActionsProvider<TCtx>(sp.GetService<ICommandFactories<StateContext>>(), stateCommandFactories,
-                sp, stateName);
+        var processorFactory = GetStateProcessorFactory(ActionsProviderFactory);
 
-        var processorFactory = GetStateProcessorFactory(actionsProviderFactory);
-        var stateKey = isDefaultState ? null : stateName.AsStateKey();
         Services.Add(new ServiceDescriptor(typeof(IStateProcessor), stateKey, processorFactory, ServiceLifetime.Scoped));
+
+        IStateActionsProvider ActionsProviderFactory(IServiceProvider sp) => new ActionsProvider(
+            commandFactories?.Merge(sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCommandsServiceKey))
+                ?? sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCommandsServiceKey),
+            callbackFactories?.Merge(sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCallbackServiceKey))
+                ?? sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCallbackServiceKey),
+            sp, stateName);
     }
 
     protected abstract Func<IServiceProvider, object?, IStateProcessor> GetStateProcessorFactory(
@@ -72,23 +87,22 @@ public abstract class StateBuilderBase<TCtx> where TCtx : StateContext
 
     internal virtual void BindSetupService(string defaultLanguageCode)
     {
-        var stateKey = isDefaultState ? null : stateName.AsStateKey();
+        var stateKey = isDefaultState ? null : StateName.AsStateKey();
         var allLanguageCodes = languageCodes.Append(defaultLanguageCode).Distinct().ToArray();
         var stateCommandDescriptions = commandsCollectionBuilder != null && commandsCollectionBuilder.Descriptions.Count > 0
             ? new CommandDescriptions(commandsCollectionBuilder.Descriptions)
             : null;
 
-        Func<IServiceProvider, object?, IStateSetupService> setupServiceFactory =
-            (serviceProvider, _) => new StateSetupService(
-                serviceProvider.GetRequiredService<ITelegramBotClient>(),
-                serviceProvider.GetService<ICommandDescriptions>(),
-                stateCommandDescriptions,
-                allLanguageCodes,
-                defaultLanguageCode,
-                serviceProvider.GetRequiredService<ILogger<StateSetupService>>(),
-                menuButtonFactory);
+        Services.Add(new ServiceDescriptor(typeof(IStateSetupService), stateKey, SetupServiceFactory, ServiceLifetime.Scoped));
 
-        Services.Add(new ServiceDescriptor(typeof(IStateSetupService), stateKey, setupServiceFactory, ServiceLifetime.Scoped));
+        IStateSetupService SetupServiceFactory(IServiceProvider serviceProvider, object? _) => new StateSetupService(
+            serviceProvider.GetRequiredService<ITelegramBotClient>(),
+            serviceProvider.GetService<ICommandDescriptions>(),
+            stateCommandDescriptions,
+            allLanguageCodes,
+            defaultLanguageCode,
+            serviceProvider.GetRequiredService<ILogger<StateSetupService>>(),
+            menuButtonFactory);
     }
 }
 
@@ -101,7 +115,7 @@ public sealed class StateBuilder(string stateName,
     protected override Func<IServiceProvider, object?, IStateProcessor> GetStateProcessorFactory(
         Func<IServiceProvider, IStateActionsProvider> actionsProviderFactory)
     {
-        var stateName = this.stateName;
+        var stateName = StateName;
         var stateSteps = StepsCollection.ToArray().AsReadOnly();
         var defaultActionFactory = DefaultActionFactory;
 
@@ -109,7 +123,9 @@ public sealed class StateBuilder(string stateName,
             new StateContextFactory(new Lazy<ITelegramBotClient>(() => serviceProvider.GetRequiredService<ITelegramBotClient>())),
             actionsProviderFactory(serviceProvider),
             new StepsCollection<StateContext>(serviceProvider, stateSteps),
-            defaultActionFactory != null ? defaultActionFactory(serviceProvider, stateName) : null,
+            defaultActionFactory == null
+                ? serviceProvider.GetService<IAsyncCommand<StateContext, IStateResult>>()
+                : defaultActionFactory(serviceProvider, stateName),
             serviceProvider.GetRequiredService<ILogger<IStateProcessor>>());
     }
 }
@@ -125,14 +141,14 @@ public sealed class StateBuilder<TData>(string stateName,
     {
         get => dataProviderFactory;
         set => dataProviderFactory = dataProviderFactory != null
-            ? throw new InvalidOperationException($"Data provider for state '{stateName}' has beern already configured.")
+            ? throw new InvalidOperationException($"Data provider for state '{StateName}' has beern already configured.")
             : value;
     }
 
     protected override Func<IServiceProvider, object?, IStateProcessor> GetStateProcessorFactory(
         Func<IServiceProvider, IStateActionsProvider> actionsProviderFactory)
     {
-        var stateName = this.stateName;
+        var stateName = StateName;
         var stateSteps = StepsCollection.ToArray().AsReadOnly();
         var defaultActionFactory = DefaultActionFactory;
         var dataProviderFactory = DataProviderFactory;
@@ -145,7 +161,9 @@ public sealed class StateBuilder<TData>(string stateName,
                 new Lazy<ITelegramBotClient>(() => serviceProvider.GetRequiredService<ITelegramBotClient>())),
             actionsProviderFactory(serviceProvider),
             new StepsCollection<StateContext<TData>>(serviceProvider, stateSteps),
-            defaultActionFactory != null ? defaultActionFactory(serviceProvider, stateName) : null,
+            defaultActionFactory != null
+                ? (IAsyncCommand<StateContext, IStateResult>)defaultActionFactory(serviceProvider, stateName)
+                : serviceProvider.GetService<IAsyncCommand<StateContext, IStateResult>>(),
             serviceProvider.GetRequiredService<ILogger<IStateProcessor>>());
     }
 }

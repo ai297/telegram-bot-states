@@ -15,8 +15,28 @@ public static class StateBuilderExtensions
         where TCtx : StateContext
         where TBuilder : StateBuilderBase<TCtx>
     {
+        ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configureCommands);
         configureCommands(builder.CommandsCollectionBuilder);
+
+        return builder;
+    }
+
+    public static TBuilder WithCallbacks<TBuilder, TCtx, TKey>(this TBuilder builder,
+        Func<ChatUpdate, TKey> callbackKeySelector,
+        Action<CallbacksCollectionBuilder<TKey, TCtx>> configureCallbacks)
+        where TCtx : StateContext
+        where TBuilder : StateBuilderBase<TCtx>
+        where TKey : notnull
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(callbackKeySelector);
+        ArgumentNullException.ThrowIfNull(configureCallbacks);
+
+        var collectionBuilder = new CallbacksCollectionBuilder<TKey, TCtx>(builder.Services, builder.StateName);
+        builder.CallbackFactories = new ActionFactoriesCollection<TKey, TCtx>(callbackKeySelector, collectionBuilder.Factories);
+
+        configureCallbacks(collectionBuilder);
 
         return builder;
     }
@@ -25,6 +45,7 @@ public static class StateBuilderExtensions
         where TCtx : StateContext
         where TBuilder : StateBuilderBase<TCtx>
     {
+        ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configureSteps);
         configureSteps(builder.StepsCollection);
 
@@ -36,6 +57,7 @@ public static class StateBuilderExtensions
         where TCtx : StateContext
         where TBuilder : StateBuilderBase<TCtx>
     {
+        ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(getLocalizedButton);
 
         builder.MenuButtonFactory = languageCode => {
@@ -54,6 +76,8 @@ public static class StateBuilderExtensions
         where TCtx : StateContext
         where TBuilder : StateBuilderBase<TCtx>
     {
+        ArgumentNullException.ThrowIfNull(builder);
+
         builder.MenuButtonFactory = _ => new MenuButtonCommands();
 
         return builder;
@@ -64,7 +88,9 @@ public static class StateBuilderExtensions
         where TCtx : StateContext
         where TBuilder : StateBuilderBase<TCtx>
     {
+        ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(factory);
+
         builder.DefaultActionFactory = factory;
 
         return builder;
@@ -74,6 +100,9 @@ public static class StateBuilderExtensions
         where TCtx : StateContext
         where TBuilder : StateBuilderBase<TCtx>
     {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(@delegate);
+
         var delegateFactory = DelegateHelper
             .CreateDelegateFactory<IServiceProvider, Command<TCtx, Task<IStateResult>>>(
                 @delegate, GetServiceExpr);
@@ -86,19 +115,29 @@ public static class StateBuilderExtensions
     public static StepBinder<TBuilder, TCtx> WithDefaultAction<TBuilder, TCtx>(this TBuilder builder)
         where TCtx : StateContext
         where TBuilder : StateBuilderBase<TCtx>
-        => new(builder);
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return new(builder);
+    }
 
     public static StateBuilder<TData> WithDataProvider<TBuilder, TData>(this StateBuilder<TData> builder,
         StateServiceFactory<IStateDataProvider<TData>> factory)
     {
+        ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(factory);
+
         builder.DataProviderFactory = factory;
 
         return builder;
     }
 
     public static DataProviderBinder<TData> WithDataProvider<TData>(this StateBuilder<TData> builder)
-        => new(builder);
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return new(builder);
+    }
 
     /// <summary>
     /// Your <paramref name="@delegate" /> can receive <seealso cref="Telegram.Bot.States.ChatUpdate" />
@@ -106,6 +145,7 @@ public static class StateBuilderExtensions
     /// </summary>
     public static StateBuilder<TData> WithDataProvider<TData>(this StateBuilder<TData> builder, Delegate @delegate)
     {
+        ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(@delegate);
 
         var delegateFactory = DelegateHelper
