@@ -168,7 +168,7 @@ public sealed class StatesConfiguration(IServiceCollection services,
     {
         var delegateFactory = DelegateHelper
             .CreateDelegateFactory<IServiceProvider, Func<ChatUpdate, Task<TData>>>(
-                @delegate, (serviceProvider, type) => serviceProvider.GetRequiredService(type));
+                @delegate, StateBuilderMethods.GetServiceExpr);
         
         Func<IServiceProvider, IStateDataProvider<TData>> factory = serviceProvider =>
             new DelegateDataProvider<TData>(delegateFactory(serviceProvider));
@@ -193,7 +193,7 @@ public sealed class StatesConfiguration(IServiceCollection services,
 
         var delegateFactory = DelegateHelper
             .CreateDelegateFactory<IServiceProvider, Command<StateContext, Task<IStateResult>>>(
-                @delegate, (serviceProvider, type) => serviceProvider.GetRequiredService(type));
+                @delegate, StateBuilderMethods.GetServiceExpr);
 
         services.AddTransient<IAsyncCommand<StateContext, IStateResult>>(
             sp => new AsyncDelegateCommandLazy<StateContext, IStateResult>(sp, delegateFactory));

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Telegram.Bot.Types;
 
@@ -112,6 +114,37 @@ public sealed class StateBuilder(string stateName,
     bool isDefaultState = false)
     : StateBuilderBase<StateContext>(stateName, services, languageCodes, isDefaultState)
 {
+    #region Methods
+
+    public StateBuilder WithCommands(Action<CommandsCollectionBuilder<StateContext>> configureCommands)
+        => StateBuilderMethods.WithCommands(this, configureCommands);
+
+    public StateBuilder WithCallbacks<TKey>(Func<ChatUpdate, TKey> callbackKeySelector,
+        Action<CallbacksCollectionBuilder<TKey, StateContext>> configureCallbacks)
+        where TKey : notnull
+        => StateBuilderMethods.WithCallbacks(this, callbackKeySelector, configureCallbacks);
+
+    public StateBuilder WithSteps(Action<StateStepsCollection<StateContext>> configureSteps)
+        => StateBuilderMethods.WithSteps(this, configureSteps);
+
+    public StateBuilder WithWebAppButton(Func<string, (string text, string url)> getLocalizedButton)
+        => StateBuilderMethods.WithWebAppButton<StateBuilder, StateContext>(this, getLocalizedButton);
+
+    public StateBuilder WithCommandsMenuButton()
+        => StateBuilderMethods.WithCommandsMenuButton<StateBuilder, StateContext>(this);
+
+    public StateBuilder WithDefaultAction(StateServiceFactory<IStateStep<StateContext>> factory)
+        => StateBuilderMethods.WithDefaultAction(this, factory);
+
+    public StateBuilder WithDefaultAction(Delegate @delegate)
+        => StateBuilderMethods.WithDefaultAction<StateBuilder, StateContext>(this, @delegate);
+
+    public StateBuilder WithDefaultAction<T>(ServiceLifetime serviceLifetime = ServiceLifetime.Scoped)
+        where T : class, IStateStep<StateContext>
+        => StateBuilderMethods.WithDefaultAction<StateBuilder, StateContext, T>(this, serviceLifetime);
+
+    #endregion
+
     protected override Func<IServiceProvider, object?, IStateProcessor> GetStateProcessorFactory(
         Func<IServiceProvider, IStateActionsProvider> actionsProviderFactory)
     {
@@ -144,6 +177,72 @@ public sealed class StateBuilder<TData>(string stateName,
             ? throw new InvalidOperationException($"Data provider for state '{StateName}' has beern already configured.")
             : value;
     }
+
+    #region Methods
+
+    public StateBuilder<TData> WithCommands(Action<CommandsCollectionBuilder<StateContext<TData>>> configureCommands)
+        => StateBuilderMethods.WithCommands(this, configureCommands);
+
+    public StateBuilder<TData> WithCallbacks<TKey>(Func<ChatUpdate, TKey> callbackKeySelector,
+        Action<CallbacksCollectionBuilder<TKey, StateContext<TData>>> configureCallbacks)
+        where TKey : notnull
+        => StateBuilderMethods.WithCallbacks(this, callbackKeySelector, configureCallbacks);
+
+    public StateBuilder<TData> WithSteps(Action<StateStepsCollection<StateContext<TData>>> configureSteps)
+        => StateBuilderMethods.WithSteps(this, configureSteps);
+
+    public StateBuilder<TData> WithWebAppButton(Func<string, (string text, string url)> getLocalizedButton)
+        => StateBuilderMethods.WithWebAppButton<StateBuilder<TData>, StateContext<TData>>(this, getLocalizedButton);
+
+    public StateBuilder<TData> WithCommandsMenuButton()
+        => StateBuilderMethods.WithCommandsMenuButton<StateBuilder<TData>, StateContext<TData>>(this);
+
+    public StateBuilder<TData> WithDefaultAction(StateServiceFactory<IStateStep<StateContext<TData>>> factory)
+        => StateBuilderMethods.WithDefaultAction(this, factory);
+
+    public StateBuilder<TData> WithDefaultAction(Delegate @delegate)
+        => StateBuilderMethods.WithDefaultAction<StateBuilder<TData>, StateContext<TData>>(this, @delegate);
+
+    public StateBuilder<TData> WithDefaultAction<T>(ServiceLifetime serviceLifetime = ServiceLifetime.Scoped)
+        where T : class, IStateStep<StateContext<TData>>
+        => StateBuilderMethods.WithDefaultAction<StateBuilder<TData>, StateContext<TData>, T>(this, serviceLifetime);
+
+    public StateBuilder<TData> WithDataProvider(StateServiceFactory<IStateDataProvider<TData>> factory)
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+
+        DataProviderFactory = factory;
+
+        return this;
+    }
+
+    public StateBuilder<TData> WithDataProvider<T>(ServiceLifetime serviceLifetime = ServiceLifetime.Scoped)
+        where T : class, IStateDataProvider<TData>
+    {
+        DataProviderFactory = (sp, _) => sp.GetRequiredService<T>();
+        Services.TryAdd(new ServiceDescriptor(typeof(T), typeof(T), serviceLifetime));
+
+        return this;
+    }
+
+    /// <summary>
+    /// Your <paramref name="@delegate" /> can receive <seealso cref="Telegram.Bot.States.ChatUpdate" />
+    /// as parameter and  must return Task&lt;<typeparamref name="TData" />&rt; as result.
+    /// </summary>
+    public StateBuilder<TData> WithDataProvider(Delegate @delegate)
+    {
+        ArgumentNullException.ThrowIfNull(@delegate);
+
+        var delegateFactory = DelegateHelper
+            .CreateDelegateFactory<IServiceProvider,Func<ChatUpdate, Task<TData>>>(
+                @delegate, StateBuilderMethods.GetServiceExpr);
+
+        DataProviderFactory = (sp, _) => new DelegateDataProvider<TData>(delegateFactory(sp));
+
+        return this;
+    }
+
+    #endregion
 
     protected override Func<IServiceProvider, object?, IStateProcessor> GetStateProcessorFactory(
         Func<IServiceProvider, IStateActionsProvider> actionsProviderFactory)

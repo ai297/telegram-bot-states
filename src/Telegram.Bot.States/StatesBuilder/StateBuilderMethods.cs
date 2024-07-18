@@ -2,16 +2,17 @@
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Telegram.Bot.Types;
 
 namespace Telegram.Bot.States;
 
-public static class StateBuilderExtensions
+internal static class StateBuilderMethods
 {
     public static readonly Expression<Func<IServiceProvider, Type, object>> GetServiceExpr
         = (serviceProvider, type) => serviceProvider.GetRequiredService(type);
 
-    public static TBuilder WithCommands<TBuilder, TCtx>(this TBuilder builder, Action<CommandsCollectionBuilder<TCtx>> configureCommands)
+    public static TBuilder WithCommands<TBuilder, TCtx>(TBuilder builder, Action<CommandsCollectionBuilder<TCtx>> configureCommands)
         where TCtx : StateContext
         where TBuilder : StateBuilderBase<TCtx>
     {
@@ -112,47 +113,15 @@ public static class StateBuilderExtensions
         return builder;
     }
 
-    public static StepBinder<TBuilder, TCtx> WithDefaultAction<TBuilder, TCtx>(this TBuilder builder)
+    public static TBuilder WithDefaultAction<TBuilder, TCtx, T>(this TBuilder builder, ServiceLifetime serviceLifetime)
         where TCtx : StateContext
         where TBuilder : StateBuilderBase<TCtx>
+        where T : class, IStateStep<TCtx>
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return new(builder);
-    }
-
-    public static StateBuilder<TData> WithDataProvider<TBuilder, TData>(this StateBuilder<TData> builder,
-        StateServiceFactory<IStateDataProvider<TData>> factory)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(factory);
-
-        builder.DataProviderFactory = factory;
-
-        return builder;
-    }
-
-    public static DataProviderBinder<TData> WithDataProvider<TData>(this StateBuilder<TData> builder)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        return new(builder);
-    }
-
-    /// <summary>
-    /// Your <paramref name="@delegate" /> can receive <seealso cref="Telegram.Bot.States.ChatUpdate" />
-    /// as parameter and  must return Task&lt;<typeparamref name="TData" />&rt; as result.
-    /// </summary>
-    public static StateBuilder<TData> WithDataProvider<TData>(this StateBuilder<TData> builder, Delegate @delegate)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(@delegate);
-
-        var delegateFactory = DelegateHelper
-            .CreateDelegateFactory<IServiceProvider,Func<ChatUpdate, Task<TData>>>(
-                @delegate, GetServiceExpr);
-
-        builder.DataProviderFactory = (sp, _) => new DelegateDataProvider<TData>(delegateFactory(sp));
+        builder.DefaultActionFactory = (sp, _) => sp.GetRequiredService<T>();
+        builder.Services.TryAdd(new ServiceDescriptor(typeof(T), typeof(T), serviceLifetime));
 
         return builder;
     }
