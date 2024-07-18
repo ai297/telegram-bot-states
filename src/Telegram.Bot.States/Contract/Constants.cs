@@ -14,4 +14,6 @@ public static class Constants
     public const string GlobalCallbackServiceKey = "global_actions:callbacks";
 
     public static string CommandKeySelector(ChatUpdate update) => update.Command;
+
+    public const string SecretTokenHeader = "X-Telegram-Bot-Api-Secret-Token";
 }

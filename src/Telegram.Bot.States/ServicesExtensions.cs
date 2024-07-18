@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -52,10 +53,12 @@ public static class ServicesExtensions
         if (!commandLanguages.Contains(defaultLanguageCode))
             commandLanguages.Add(defaultLanguageCode);
 
+        var secretTokenRegex = new Regex(@"^[a-zA-Z0-9-_]{1,256}$");
         optionsBuilder
             .Validate(config => !string.IsNullOrWhiteSpace(config.Token)
                 && !string.IsNullOrWhiteSpace(config.HostAddress)
-                && !string.IsNullOrWhiteSpace(config.WebHookPath))
+                && !string.IsNullOrWhiteSpace(BotConfiguration.WebHookPath)
+                && (string.IsNullOrEmpty(config.SecretToken) || secretTokenRegex.IsMatch(config.SecretToken)))
             .ValidateOnStart();
 
         services.AddHttpClient("TgHttpClient").AddTypedClient<ITelegramBotClient>(
@@ -75,6 +78,8 @@ public static class ServicesExtensions
             defaultLanguageCode,
             sp.GetRequiredService<ILogger<BotSetupService>>(),
             getMenuButton));
+
+        services.AddHostedService<WebhookService>();
 
         return statesConfiguration;
     }

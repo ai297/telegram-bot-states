@@ -39,7 +39,7 @@ internal class WebhookController(
             ? new InputFileStream(System.IO.File.OpenRead(config.CertificatePath))
             : null;
 
-        var webhookAddress = $"{config.HostAddress}/{config.WebHookPath}/update";
+        var webhookAddress = $"{config.HostAddress}/{BotConfiguration.WebHookPath}/update";
 
         await botClient.SetWebhookAsync(webhookAddress,
             dropPendingUpdates: dropUpdates,
