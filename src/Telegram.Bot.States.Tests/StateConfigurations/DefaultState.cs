@@ -15,7 +15,7 @@ public class DefaultState
         var services = new ServiceCollection();
         services.AddSingleton(Substitute.For<ILogger<IStateProcessor>>());
 
-        var step = Substitute.For<IStateStep<StateContext>>();
+        var step = Substitute.For<IStateAction>();
         step.Configure()
             .Execute(Arg.Any<StateContext>())
             .Returns(StateResults.Complete());

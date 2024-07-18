@@ -12,9 +12,10 @@ internal static class StateBuilderMethods
     public static readonly Expression<Func<IServiceProvider, Type, object>> GetServiceExpr
         = (serviceProvider, type) => serviceProvider.GetRequiredService(type);
 
-    public static TBuilder WithCommands<TBuilder, TCtx>(TBuilder builder, Action<CommandsCollectionBuilder<TCtx>> configureCommands)
+    public static TBuilder WithCommands<TBuilder, TCtx, TAction>(TBuilder builder, Action<CommandsCollectionBuilder<TCtx, TAction>> configureCommands)
         where TCtx : StateContext
-        where TBuilder : StateBuilderBase<TCtx>
+        where TBuilder : StateBuilderBase<TCtx, TAction>
+        where TAction : IAsyncCommand<TCtx, IStateResult>
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configureCommands);
@@ -23,18 +24,19 @@ internal static class StateBuilderMethods
         return builder;
     }
 
-    public static TBuilder WithCallbacks<TBuilder, TCtx, TKey>(this TBuilder builder,
+    public static TBuilder WithCallbacks<TBuilder, TCtx, TKey, TAction>(this TBuilder builder,
         Func<ChatUpdate, TKey> callbackKeySelector,
-        Action<CallbacksCollectionBuilder<TKey, TCtx>> configureCallbacks)
+        Action<CallbacksCollectionBuilder<TKey, TCtx, TAction>> configureCallbacks)
         where TCtx : StateContext
-        where TBuilder : StateBuilderBase<TCtx>
+        where TBuilder : StateBuilderBase<TCtx, TAction>
         where TKey : notnull
+        where TAction : IAsyncCommand<TCtx, IStateResult>
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(callbackKeySelector);
         ArgumentNullException.ThrowIfNull(configureCallbacks);
 
-        var collectionBuilder = new CallbacksCollectionBuilder<TKey, TCtx>(builder.Services, builder.StateName);
+        var collectionBuilder = new CallbacksCollectionBuilder<TKey, TCtx, TAction>(builder.Services, builder.StateName);
         builder.CallbackFactories = new ActionFactoriesCollection<TKey, TCtx>(callbackKeySelector, collectionBuilder.Factories);
 
         configureCallbacks(collectionBuilder);
@@ -42,9 +44,10 @@ internal static class StateBuilderMethods
         return builder;
     }
 
-    public static TBuilder WithSteps<TBuilder, TCtx>(this TBuilder builder, Action<StateStepsCollection<TCtx>> configureSteps)
+    public static TBuilder WithSteps<TBuilder, TCtx, TAction>(this TBuilder builder, Action<StateStepsCollection<TCtx, TAction>> configureSteps)
         where TCtx : StateContext
-        where TBuilder : StateBuilderBase<TCtx>
+        where TAction : IAsyncCommand<TCtx, IStateResult>
+        where TBuilder : StateBuilderBase<TCtx, TAction>
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configureSteps);
@@ -53,10 +56,11 @@ internal static class StateBuilderMethods
         return builder;
     }
 
-    public static TBuilder WithWebAppButton<TBuilder, TCtx>(this TBuilder builder,
+    public static TBuilder WithWebAppButton<TBuilder, TCtx, TAction>(this TBuilder builder,
         Func<string, (string text, string url)> getLocalizedButton)
         where TCtx : StateContext
-        where TBuilder : StateBuilderBase<TCtx>
+        where TBuilder : StateBuilderBase<TCtx, TAction>
+        where TAction : IAsyncCommand<TCtx, IStateResult>
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(getLocalizedButton);
@@ -73,9 +77,10 @@ internal static class StateBuilderMethods
         return builder;
     }
 
-    public static TBuilder WithCommandsMenuButton<TBuilder, TCtx>(this TBuilder builder)
+    public static TBuilder WithCommandsMenuButton<TBuilder, TCtx, TAction>(this TBuilder builder)
         where TCtx : StateContext
-        where TBuilder : StateBuilderBase<TCtx>
+        where TAction : IAsyncCommand<TCtx, IStateResult>
+        where TBuilder : StateBuilderBase<TCtx, TAction>
     {
         ArgumentNullException.ThrowIfNull(builder);
 
@@ -84,22 +89,24 @@ internal static class StateBuilderMethods
         return builder;
     }
 
-    public static TBuilder WithDefaultAction<TBuilder, TCtx>(this TBuilder builder,
-        StateServiceFactory<IStateStep<TCtx>> factory)
+    public static TBuilder WithDefaultAction<TBuilder, TCtx, TAction>(this TBuilder builder,
+        StateServiceFactory<TAction> factory)
         where TCtx : StateContext
-        where TBuilder : StateBuilderBase<TCtx>
+        where TAction : IAsyncCommand<TCtx, IStateResult>
+        where TBuilder : StateBuilderBase<TCtx, TAction>
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(factory);
 
-        builder.DefaultActionFactory = factory;
+        builder.DefaultActionFactory = factory as StateServiceFactory<IAsyncCommand<TCtx, IStateResult>>;
 
         return builder;
     }
 
-    public static TBuilder WithDefaultAction<TBuilder, TCtx>(this TBuilder builder, Delegate @delegate)
+    public static TBuilder WithDefaultAction<TBuilder, TCtx, TAction>(this TBuilder builder, Delegate @delegate)
         where TCtx : StateContext
-        where TBuilder : StateBuilderBase<TCtx>
+        where TAction : IAsyncCommand<TCtx, IStateResult>
+        where TBuilder : StateBuilderBase<TCtx, TAction>
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(@delegate);
@@ -113,10 +120,11 @@ internal static class StateBuilderMethods
         return builder;
     }
 
-    public static TBuilder WithDefaultAction<TBuilder, TCtx, T>(this TBuilder builder, ServiceLifetime serviceLifetime)
+    public static TBuilder WithDefaultAction<TBuilder, TCtx, TAction, T>(this TBuilder builder, ServiceLifetime serviceLifetime)
         where TCtx : StateContext
-        where TBuilder : StateBuilderBase<TCtx>
-        where T : class, IStateStep<TCtx>
+        where TAction : IAsyncCommand<TCtx, IStateResult>
+        where TBuilder : StateBuilderBase<TCtx, TAction>
+        where T : class, TAction
     {
         ArgumentNullException.ThrowIfNull(builder);
 

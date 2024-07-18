@@ -16,7 +16,7 @@ public sealed class StatesConfiguration(IServiceCollection services,
     private readonly ICollection<string> commandLanguages = commandLanguages;
     private readonly string defaultLanguageCode = defaultLanguageCode;
 
-    private CommandsCollectionBuilder<StateContext>? globalCommandsBuilder = null;
+    private CommandsCollectionBuilder<StateContext, IStateAction>? globalCommandsBuilder = null;
 
     private Func<string, MenuButton>? menuButtonFactory = null;
     internal Func<string, MenuButton>? MenuButtonFactory
@@ -85,11 +85,11 @@ public sealed class StatesConfiguration(IServiceCollection services,
         return this;
     }
 
-    public StatesConfiguration ConfigureCommands(Action<CommandsCollectionBuilder<StateContext>> configureCommands)
+    public StatesConfiguration ConfigureCommands(Action<CommandsCollectionBuilder<StateContext, IStateAction>> configureCommands)
     {
         ArgumentNullException.ThrowIfNull(configureCommands);
 
-        globalCommandsBuilder ??= new CommandsCollectionBuilder<StateContext>(services, commandLanguages);
+        globalCommandsBuilder ??= new CommandsCollectionBuilder<StateContext, IStateAction>(services, commandLanguages);
         configureCommands(globalCommandsBuilder);
 
         if (globalCommandsBuilder.Descriptions.Count > 0)
@@ -109,14 +109,14 @@ public sealed class StatesConfiguration(IServiceCollection services,
     }
 
     public StatesConfiguration ConfigureCallbacks<TKey>(Func<ChatUpdate, TKey> keySelector,
-        Action<CallbacksCollectionBuilder<TKey, StateContext>> configureCallbacks)
+        Action<CallbacksCollectionBuilder<TKey, StateContext, IStateAction>> configureCallbacks)
         where TKey : notnull
     {
         ArgumentNullException.ThrowIfNull(keySelector);
         ArgumentNullException.ThrowIfNull(configureCallbacks);
         ThrowIfCallbacksConfigured(services);
 
-        var callbacksBuilder = new CallbacksCollectionBuilder<TKey, StateContext>(services);
+        var callbacksBuilder = new CallbacksCollectionBuilder<TKey, StateContext, IStateAction>(services);
         configureCallbacks(callbacksBuilder);
 
         services.AddKeyedSingleton<IActionFactoriesCollection>(Constants.GlobalCallbackServiceKey,
@@ -142,20 +142,21 @@ public sealed class StatesConfiguration(IServiceCollection services,
     }
 
     public StatesConfiguration ConfigureDefaultDataProvider<TData>(
-        Func<IServiceProvider, IStateDataProvider<TData>> factory)
+        Func<IServiceProvider, IStateDataProvider<TData>> factory,
+        ServiceLifetime serviceLifetime = ServiceLifetime.Scoped)
     {
         ArgumentNullException.ThrowIfNull(factory);
         ThrowIfDataProviderAdded<TData>(services);
-        services.AddTransient(factory);
+        services.TryAdd(new ServiceDescriptor(typeof(IStateDataProvider<TData>), factory, serviceLifetime));
 
         return this;
     }
 
-    public StatesConfiguration ConfigureDefaultDataProvider<TData, TService>()
+    public StatesConfiguration ConfigureDefaultDataProvider<TData, TService>(ServiceLifetime serviceLifetime = ServiceLifetime.Scoped)
         where TService : class, IStateDataProvider<TData>
     {
         ThrowIfDataProviderAdded<TData>(services);
-        services.AddTransient<IStateDataProvider<TData>, TService>();
+        services.TryAdd(new ServiceDescriptor(typeof(IStateDataProvider<TData>), typeof(TService), serviceLifetime));
 
         return this;
     }
@@ -164,7 +165,8 @@ public sealed class StatesConfiguration(IServiceCollection services,
     /// Your <paramref name="@delegate" /> can receive <seealso cref="Telegram.Bot.States.ChatUpdate" />
     /// as parameter and  must return ValueTask&lt;<typeparamref name="TStateContext" />&rt; as result.
     /// </summary>
-    public StatesConfiguration ConfigureDefaultDataProvider<TData>(Delegate @delegate)
+    public StatesConfiguration ConfigureDefaultDataProvider<TData>(Delegate @delegate,
+        ServiceLifetime serviceLifetime = ServiceLifetime.Scoped)
     {
         var delegateFactory = DelegateHelper
             .CreateDelegateFactory<IServiceProvider, Func<ChatUpdate, Task<TData>>>(
@@ -173,20 +175,21 @@ public sealed class StatesConfiguration(IServiceCollection services,
         Func<IServiceProvider, IStateDataProvider<TData>> factory = serviceProvider =>
             new DelegateDataProvider<TData>(delegateFactory(serviceProvider));
         
-        return ConfigureDefaultDataProvider(factory);
+        return ConfigureDefaultDataProvider(factory, serviceLifetime);
     }
 
-    public StatesConfiguration ConfigureDefaultAction(Func<IServiceProvider, IStateStep<StateContext>> factory)
+    public StatesConfiguration ConfigureDefaultAction(Func<IServiceProvider, IStateAction> factory,
+        ServiceLifetime serviceLifetime = ServiceLifetime.Transient)
     {
         ArgumentNullException.ThrowIfNull(factory);
         ThrowIfDefaultActionRegistered(services);
 
-        services.AddTransient<IAsyncCommand<StateContext, IStateResult>>(factory);
+        services.TryAdd(new ServiceDescriptor(typeof(IAsyncCommand<StateContext, IStateResult>), factory, serviceLifetime));
 
         return this;
     }
 
-    public StatesConfiguration ConfigureDefaultAction(Delegate @delegate)
+    public StatesConfiguration ConfigureDefaultAction(Delegate @delegate, ServiceLifetime serviceLifetime = ServiceLifetime.Transient)
     {
         ArgumentNullException.ThrowIfNull(@delegate);
         ThrowIfDefaultActionRegistered(services);
@@ -195,17 +198,18 @@ public sealed class StatesConfiguration(IServiceCollection services,
             .CreateDelegateFactory<IServiceProvider, Command<StateContext, Task<IStateResult>>>(
                 @delegate, StateBuilderMethods.GetServiceExpr);
 
-        services.AddTransient<IAsyncCommand<StateContext, IStateResult>>(
-            sp => new AsyncDelegateCommandLazy<StateContext, IStateResult>(sp, delegateFactory));
+        services.TryAdd(new ServiceDescriptor(typeof(IAsyncCommand<StateContext, IStateResult>),
+            sp => new AsyncDelegateCommandLazy<StateContext, IStateResult>(sp, delegateFactory),
+            serviceLifetime));
 
         return this;
     }
 
-    public StatesConfiguration ConfigureDefaultAction<T>()
-        where T : class, IStateStep<StateContext>
+    public StatesConfiguration ConfigureDefaultAction<T>(ServiceLifetime serviceLifetime = ServiceLifetime.Transient)
+        where T : class, IStateAction
     {
         ThrowIfDefaultActionRegistered(services);
-        services.AddTransient<IAsyncCommand<StateContext, IStateResult>, T>();
+        services.TryAdd(new ServiceDescriptor(typeof(IAsyncCommand<StateContext, IStateResult>), typeof(T), serviceLifetime));
 
         return this;
     }

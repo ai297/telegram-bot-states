@@ -9,7 +9,9 @@ using Telegram.Bot.Types;
 
 namespace Telegram.Bot.States;
 
-public abstract class StateBuilderBase<TCtx> where TCtx : StateContext
+public abstract class StateBuilderBase<TCtx, TAction>
+    where TCtx : StateContext
+    where TAction : IAsyncCommand<TCtx, IStateResult>
 {
     protected readonly ICollection<string> languageCodes;
     protected readonly bool isDefaultState;
@@ -17,13 +19,13 @@ public abstract class StateBuilderBase<TCtx> where TCtx : StateContext
     internal readonly IServiceCollection Services;
     internal readonly string StateName;
 
-    private CommandsCollectionBuilder<TCtx>? commandsCollectionBuilder = null;
-    internal CommandsCollectionBuilder<TCtx> CommandsCollectionBuilder => commandsCollectionBuilder
-        ??= new CommandsCollectionBuilder<TCtx>(Services, languageCodes, StateName);
+    private CommandsCollectionBuilder<TCtx, TAction>? commandsCollectionBuilder = null;
+    internal CommandsCollectionBuilder<TCtx, TAction> CommandsCollectionBuilder => commandsCollectionBuilder
+        ??= new CommandsCollectionBuilder<TCtx, TAction>(Services, languageCodes, StateName);
 
-    private StateStepsCollection<TCtx>? stepsCollection = null;
-    internal StateStepsCollection<TCtx> StepsCollection => stepsCollection
-        ??= new StateStepsCollection<TCtx>(StateName, Services);
+    private StateStepsCollection<TCtx, TAction>? stepsCollection = null;
+    internal StateStepsCollection<TCtx, TAction> StepsCollection => stepsCollection
+        ??= new StateStepsCollection<TCtx, TAction>(StateName, Services);
 
     private Func<string, MenuButton>? menuButtonFactory = null;
     internal Func<string, MenuButton>? MenuButtonFactory
@@ -112,36 +114,36 @@ public sealed class StateBuilder(string stateName,
     IServiceCollection services,
     ICollection<string> languageCodes,
     bool isDefaultState = false)
-    : StateBuilderBase<StateContext>(stateName, services, languageCodes, isDefaultState)
+    : StateBuilderBase<StateContext, IStateAction>(stateName, services, languageCodes, isDefaultState)
 {
     #region Methods
 
-    public StateBuilder WithCommands(Action<CommandsCollectionBuilder<StateContext>> configureCommands)
+    public StateBuilder WithCommands(Action<CommandsCollectionBuilder<StateContext, IStateAction>> configureCommands)
         => StateBuilderMethods.WithCommands(this, configureCommands);
 
     public StateBuilder WithCallbacks<TKey>(Func<ChatUpdate, TKey> callbackKeySelector,
-        Action<CallbacksCollectionBuilder<TKey, StateContext>> configureCallbacks)
+        Action<CallbacksCollectionBuilder<TKey, StateContext, IStateAction>> configureCallbacks)
         where TKey : notnull
         => StateBuilderMethods.WithCallbacks(this, callbackKeySelector, configureCallbacks);
 
-    public StateBuilder WithSteps(Action<StateStepsCollection<StateContext>> configureSteps)
+    public StateBuilder WithSteps(Action<StateStepsCollection<StateContext, IStateAction>> configureSteps)
         => StateBuilderMethods.WithSteps(this, configureSteps);
 
     public StateBuilder WithWebAppButton(Func<string, (string text, string url)> getLocalizedButton)
-        => StateBuilderMethods.WithWebAppButton<StateBuilder, StateContext>(this, getLocalizedButton);
+        => StateBuilderMethods.WithWebAppButton<StateBuilder, StateContext, IStateAction>(this, getLocalizedButton);
 
     public StateBuilder WithCommandsMenuButton()
-        => StateBuilderMethods.WithCommandsMenuButton<StateBuilder, StateContext>(this);
+        => StateBuilderMethods.WithCommandsMenuButton<StateBuilder, StateContext, IStateAction>(this);
 
-    public StateBuilder WithDefaultAction(StateServiceFactory<IStateStep<StateContext>> factory)
-        => StateBuilderMethods.WithDefaultAction(this, factory);
+    public StateBuilder WithDefaultAction(StateServiceFactory<IStateAction> factory)
+        => StateBuilderMethods.WithDefaultAction<StateBuilder, StateContext, IStateAction>(this, factory);
 
     public StateBuilder WithDefaultAction(Delegate @delegate)
-        => StateBuilderMethods.WithDefaultAction<StateBuilder, StateContext>(this, @delegate);
+        => StateBuilderMethods.WithDefaultAction<StateBuilder, StateContext, IStateAction>(this, @delegate);
 
     public StateBuilder WithDefaultAction<T>(ServiceLifetime serviceLifetime = ServiceLifetime.Scoped)
-        where T : class, IStateStep<StateContext>
-        => StateBuilderMethods.WithDefaultAction<StateBuilder, StateContext, T>(this, serviceLifetime);
+        where T : class, IStateAction
+        => StateBuilderMethods.WithDefaultAction<StateBuilder, StateContext, IStateAction, T>(this, serviceLifetime);
 
     #endregion
 
@@ -167,7 +169,7 @@ public sealed class StateBuilder<TData>(string stateName,
     IServiceCollection services,
     ICollection<string> languageCodes,
     bool isDefaultState = false)
-    : StateBuilderBase<StateContext<TData>>(stateName, services, languageCodes, isDefaultState)
+    : StateBuilderBase<StateContext<TData>, IStateAction<TData>>(stateName, services, languageCodes, isDefaultState)
 {
     private StateServiceFactory<IStateDataProvider<TData>>? dataProviderFactory = null;
     internal StateServiceFactory<IStateDataProvider<TData>>? DataProviderFactory
@@ -180,32 +182,32 @@ public sealed class StateBuilder<TData>(string stateName,
 
     #region Methods
 
-    public StateBuilder<TData> WithCommands(Action<CommandsCollectionBuilder<StateContext<TData>>> configureCommands)
+    public StateBuilder<TData> WithCommands(Action<CommandsCollectionBuilder<StateContext<TData>, IStateAction<TData>>> configureCommands)
         => StateBuilderMethods.WithCommands(this, configureCommands);
 
     public StateBuilder<TData> WithCallbacks<TKey>(Func<ChatUpdate, TKey> callbackKeySelector,
-        Action<CallbacksCollectionBuilder<TKey, StateContext<TData>>> configureCallbacks)
+        Action<CallbacksCollectionBuilder<TKey, StateContext<TData>, IStateAction<TData>>> configureCallbacks)
         where TKey : notnull
         => StateBuilderMethods.WithCallbacks(this, callbackKeySelector, configureCallbacks);
 
-    public StateBuilder<TData> WithSteps(Action<StateStepsCollection<StateContext<TData>>> configureSteps)
+    public StateBuilder<TData> WithSteps(Action<StateStepsCollection<StateContext<TData>, IStateAction<TData>>> configureSteps)
         => StateBuilderMethods.WithSteps(this, configureSteps);
 
     public StateBuilder<TData> WithWebAppButton(Func<string, (string text, string url)> getLocalizedButton)
-        => StateBuilderMethods.WithWebAppButton<StateBuilder<TData>, StateContext<TData>>(this, getLocalizedButton);
+        => StateBuilderMethods.WithWebAppButton<StateBuilder<TData>, StateContext<TData>, IStateAction<TData>>(this, getLocalizedButton);
 
     public StateBuilder<TData> WithCommandsMenuButton()
-        => StateBuilderMethods.WithCommandsMenuButton<StateBuilder<TData>, StateContext<TData>>(this);
+        => StateBuilderMethods.WithCommandsMenuButton<StateBuilder<TData>, StateContext<TData>, IStateAction<TData>>(this);
 
-    public StateBuilder<TData> WithDefaultAction(StateServiceFactory<IStateStep<StateContext<TData>>> factory)
-        => StateBuilderMethods.WithDefaultAction(this, factory);
+    public StateBuilder<TData> WithDefaultAction(StateServiceFactory<IStateAction<TData>> factory)
+        => StateBuilderMethods.WithDefaultAction<StateBuilder<TData>, StateContext<TData>, IStateAction<TData>>(this, factory);
 
     public StateBuilder<TData> WithDefaultAction(Delegate @delegate)
-        => StateBuilderMethods.WithDefaultAction<StateBuilder<TData>, StateContext<TData>>(this, @delegate);
+        => StateBuilderMethods.WithDefaultAction<StateBuilder<TData>, StateContext<TData>, IStateAction<TData>>(this, @delegate);
 
     public StateBuilder<TData> WithDefaultAction<T>(ServiceLifetime serviceLifetime = ServiceLifetime.Scoped)
-        where T : class, IStateStep<StateContext<TData>>
-        => StateBuilderMethods.WithDefaultAction<StateBuilder<TData>, StateContext<TData>, T>(this, serviceLifetime);
+        where T : class, IStateAction<TData>
+        => StateBuilderMethods.WithDefaultAction<StateBuilder<TData>, StateContext<TData>, IStateAction<TData>, T>(this, serviceLifetime);
 
     public StateBuilder<TData> WithDataProvider(StateServiceFactory<IStateDataProvider<TData>> factory)
     {

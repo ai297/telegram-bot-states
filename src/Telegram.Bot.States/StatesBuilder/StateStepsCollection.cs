@@ -8,7 +8,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Telegram.Bot.States;
 
-public sealed class StateStepsCollection<TCtx> : IEnumerable<StateStepCollectionItem<TCtx>> where TCtx : StateContext
+public sealed class StateStepsCollection<TCtx, TAction> : IEnumerable<StateStepCollectionItem<TCtx>>
+    where TCtx : StateContext
+    where TAction : IAsyncCommand<TCtx, IStateResult>
 {
     private readonly string stateName;
     private readonly IServiceCollection services;
@@ -21,8 +23,8 @@ public sealed class StateStepsCollection<TCtx> : IEnumerable<StateStepCollection
         this.services = services;
     }
 
-    public StateStepsCollection<TCtx> Add<TStep>(StateServiceFactory<TStep> stepFactory, string? stepKey = null)
-        where TStep : IStateStep<TCtx>
+    public StateStepsCollection<TCtx, TAction> Add<TStep>(StateServiceFactory<TStep> stepFactory, string? stepKey = null)
+        where TStep : TAction
     {
         ArgumentNullException.ThrowIfNull(stepFactory);
 
@@ -35,11 +37,11 @@ public sealed class StateStepsCollection<TCtx> : IEnumerable<StateStepCollection
         return this;
     }
 
-    public StateStepsCollection<TCtx> Add<TStep>(string? stepKey = null)
-        where TStep : class, IStateStep<TCtx>
+    public StateStepsCollection<TCtx, TAction> Add<TStep>(string? stepKey = null,
+        ServiceLifetime serviceLifetime = ServiceLifetime.Transient)
+        where TStep : class, TAction
     {
-        services.TryAddTransient<TStep>();
-
+        services.TryAdd(new ServiceDescriptor(typeof(TStep), typeof(TStep), serviceLifetime));
         steps.Add(new StateStepCollectionItem<TCtx>(
             GetStepKey(stepKey, typeof(TStep)),
             sp => sp.GetRequiredService<TStep>()));
@@ -47,7 +49,7 @@ public sealed class StateStepsCollection<TCtx> : IEnumerable<StateStepCollection
         return this;
     }
 
-    public StateStepsCollection<TCtx> Add(Delegate @delegate, string? stepKey = null)
+    public StateStepsCollection<TCtx, TAction> Add(Delegate @delegate, string? stepKey = null)
     {
         var delegateFactory = DelegateHelper
             .CreateDelegateFactory<IServiceProvider, Command<TCtx, Task<IStateResult>>>(

@@ -6,9 +6,10 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Telegram.Bot.States;
 
-public sealed class CallbacksCollectionBuilder<TKey, TCtx>
+public sealed class CallbacksCollectionBuilder<TKey, TCtx, TAction>
     where TKey : notnull
     where TCtx : StateContext
+    where TAction : IAsyncCommand<TCtx, IStateResult>
 {
     private readonly string? stateName;
     private readonly IServiceCollection services;
@@ -23,29 +24,30 @@ public sealed class CallbacksCollectionBuilder<TKey, TCtx>
         this.services = services;
     }
 
-    public CallbacksCollectionBuilder<TKey, TCtx> Add(TKey key,
-        StateServiceFactory<IStateAction<TCtx>> actionFactory,
+    public CallbacksCollectionBuilder<TKey, TCtx, TAction> Add(TKey key,
+        StateServiceFactory<TAction> actionFactory,
         Func<ChatUpdate, ChatState, bool>? actionCcondition = null)
     {
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(actionFactory);
         ThrowIfCallbackConfigured(key);
 
-        Factories.Add(key, new(actionFactory, actionCcondition));
+        Factories.Add(key, new((actionFactory as StateServiceFactory<IAsyncCommand<TCtx, IStateResult>>)!, actionCcondition));
 
         return this;
     }
 
-    public CallbacksCollectionBuilder<TKey, TCtx> Add<T>(TKey key,
-        Func<ChatUpdate, ChatState, bool>? actionCcondition = null)
-        where T : class, IStateAction<TCtx>
+    public CallbacksCollectionBuilder<TKey, TCtx, TAction> Add<T>(TKey key,
+        Func<ChatUpdate, ChatState, bool>? actionCcondition = null,
+        ServiceLifetime serviceLifetime = ServiceLifetime.Transient)
+        where T : class, TAction
     {
-        services.TryAddTransient<T>();
+        services.TryAdd(new ServiceDescriptor(typeof(T), typeof(T), serviceLifetime));
 
         return Add(key, (sp, _) => sp.GetRequiredService<T>(), actionCcondition);
     }
 
-    public CallbacksCollectionBuilder<TKey, TCtx> Add(TKey key, Delegate @delegate,
+    public CallbacksCollectionBuilder<TKey, TCtx, TAction> Add(TKey key, Delegate @delegate,
         Func<ChatUpdate, ChatState, bool>? actionCcondition = null)
     {
         ArgumentNullException.ThrowIfNull(key);
