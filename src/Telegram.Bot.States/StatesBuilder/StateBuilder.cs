@@ -67,25 +67,51 @@ public abstract class StateBuilderBase<TCtx> where TCtx : StateContext
     {
         var stateName = StateName;
         var stateKey = isDefaultState ? null : stateName.AsStateKey();
+
+        var stateSteps = StepsCollection.ToArray().AsReadOnly();
         var callbackFactories = CallbackFactories;
         var commandFactories = commandsCollectionBuilder?.Factories != null && commandsCollectionBuilder.Factories.Count > 0
             ? new ActionFactoriesCollection<string, TCtx>(Constants.CommandKeySelector, commandsCollectionBuilder.Factories)
             : null;
 
-        var processorFactory = GetStateProcessorFactory(ActionsProviderFactory);
+        Services.Add(new ServiceDescriptor(typeof(IStateActionsProvider), stateKey,
+            (sp, _) => new ActionsProvider(stateName,
+                commandFactories?.Merge(sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCommandsServiceKey))
+                    ?? sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCommandsServiceKey),
+                callbackFactories?.Merge(sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCallbackServiceKey))
+                    ?? sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCallbackServiceKey)),
+            ServiceLifetime.Singleton));
 
-        Services.Add(new ServiceDescriptor(typeof(IStateProcessor), stateKey, processorFactory, ServiceLifetime.Scoped));
+        Services.Add(new ServiceDescriptor(typeof(IStateStepsCollection), stateKey,
+            (sp, _) => new StepsCollection(stateSteps),
+            ServiceLifetime.Singleton));
 
-        IStateActionsProvider ActionsProviderFactory(IServiceProvider sp) => new ActionsProvider(
-            commandFactories?.Merge(sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCommandsServiceKey))
-                ?? sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCommandsServiceKey),
-            callbackFactories?.Merge(sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCallbackServiceKey))
-                ?? sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCallbackServiceKey),
-            sp, stateName);
+        Func<IServiceProvider, IStateActionsProvider> actionsProviderFactory = isDefaultState
+            ? sp => sp.GetRequiredService<IStateActionsProvider>()
+            : sp => sp.GetRequiredKeyedService<IStateActionsProvider>(stateKey);
+
+        Func<IServiceProvider, IStateStepsCollection> stepsCollectionFactory = isDefaultState
+            ? sp => sp.GetRequiredService<IStateStepsCollection>()
+            : sp => sp.GetRequiredKeyedService<IStateStepsCollection>(stateKey);
+
+        Func<IServiceProvider, IStateAction<StateContext>?> defaultActionFactory = DefaultActionFactory == null
+            ? sp => sp.GetService<IStateAction<StateContext>>()
+            : sp =>  (IStateAction<StateContext>)DefaultActionFactory(sp, stateName);
+
+        var contextFactory = GetContextFactory();
+
+        Services.Add(new ServiceDescriptor(typeof(IStateProcessor), stateKey,
+            (serviceProvider, _) => new StateProcessor<TCtx>(
+                contextFactory(serviceProvider),
+                actionsProviderFactory(serviceProvider),
+                stepsCollectionFactory(serviceProvider),
+                defaultActionFactory(serviceProvider),
+                serviceProvider,
+                serviceProvider.GetRequiredService<ILogger<IStateProcessor>>()),
+            ServiceLifetime.Scoped));
     }
 
-    protected abstract Func<IServiceProvider, object?, IStateProcessor> GetStateProcessorFactory(
-        Func<IServiceProvider, IStateActionsProvider> actionsProviderFactory);
+    protected abstract Func<IServiceProvider, IStateContextFactory<TCtx>> GetContextFactory();
 
     internal virtual void BindSetupService(string defaultLanguageCode)
     {
@@ -145,22 +171,8 @@ public sealed class StateBuilder(string stateName,
 
     #endregion
 
-    protected override Func<IServiceProvider, object?, IStateProcessor> GetStateProcessorFactory(
-        Func<IServiceProvider, IStateActionsProvider> actionsProviderFactory)
-    {
-        var stateName = StateName;
-        var stateSteps = StepsCollection.ToArray().AsReadOnly();
-        var defaultActionFactory = DefaultActionFactory;
-
-        return (serviceProvider, _) => new StateProcessor<StateContext>(
-            new StateContextFactory(new Lazy<ITelegramBotClient>(() => serviceProvider.GetRequiredService<ITelegramBotClient>())),
-            actionsProviderFactory(serviceProvider),
-            new StepsCollection(serviceProvider, stateSteps),
-            defaultActionFactory == null
-                ? serviceProvider.GetService<IStateAction<StateContext>>()
-                : defaultActionFactory(serviceProvider, stateName),
-            serviceProvider.GetRequiredService<ILogger<IStateProcessor>>());
-    }
+    protected override Func<IServiceProvider, IStateContextFactory<StateContext>> GetContextFactory()
+        => sp => new StateContextFactory(new Lazy<ITelegramBotClient>(() => sp.GetRequiredService<ITelegramBotClient>()));
 }
 
 public sealed class StateBuilder<TData>(string stateName,
@@ -244,25 +256,15 @@ public sealed class StateBuilder<TData>(string stateName,
 
     #endregion
 
-    protected override Func<IServiceProvider, object?, IStateProcessor> GetStateProcessorFactory(
-        Func<IServiceProvider, IStateActionsProvider> actionsProviderFactory)
+    protected override Func<IServiceProvider, IStateContextFactory<StateContext<TData>>> GetContextFactory()
     {
         var stateName = StateName;
-        var stateSteps = StepsCollection.ToArray().AsReadOnly();
-        var defaultActionFactory = DefaultActionFactory;
         var dataProviderFactory = DataProviderFactory;
 
-        return (serviceProvider, _) => new StateProcessor<StateContext<TData>>(
-            new StateContextFactory<TData>(
-                dataProviderFactory != null
-                    ? dataProviderFactory(serviceProvider, stateName)
-                    : serviceProvider.GetRequiredService<IStateDataProvider<TData>>(),
-                new Lazy<ITelegramBotClient>(() => serviceProvider.GetRequiredService<ITelegramBotClient>())),
-            actionsProviderFactory(serviceProvider),
-            new StepsCollection(serviceProvider, stateSteps),
-            defaultActionFactory != null
-                ? (IStateAction<StateContext>)defaultActionFactory(serviceProvider, stateName)
-                : serviceProvider.GetService<IStateAction<StateContext>>(),
-            serviceProvider.GetRequiredService<ILogger<IStateProcessor>>());
+        return dataProviderFactory != null
+            ? sp => new StateContextFactory<TData>(dataProviderFactory(sp, stateName),
+                new Lazy<ITelegramBotClient>(() => sp.GetRequiredService<ITelegramBotClient>()))
+            : sp => new StateContextFactory<TData>(sp.GetRequiredService<IStateDataProvider<TData>>(),
+                new Lazy<ITelegramBotClient>(() => sp.GetRequiredService<ITelegramBotClient>()));
     }
 }

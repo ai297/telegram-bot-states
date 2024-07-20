@@ -14,7 +14,7 @@ public class ChatState
 
     public IReadOnlyDictionary<string, string?> Labels => labels;
     public bool IsDefault => string.Equals(StateName, Constants.DefaultStateName, StringComparison.OrdinalIgnoreCase);
-    public readonly bool IsChanged;
+    public bool IsChanged { get; private set; }
 
     public ChatState(long chatId, string stateName, bool isChanged = false)
     {
@@ -51,7 +51,7 @@ public class ChatState
     /// <summary>
     /// Update state's labels. If called with <paramref name="labels"/> = null then all labels will be removed.
     /// </summary>
-    public ChatState WithLabels(ICollection<KeyValuePair<string, string?>>? labels)
+    public ChatState WithLabels(IEnumerable<KeyValuePair<string, string?>>? labels)
     {
         if (labels == null)
         {
@@ -64,6 +64,10 @@ public class ChatState
 
         return this;
     }
+
+    public ChatState Same() => new ChatState(ChatId, StateName, isChanged: false).WithLabels(Labels);
+
+    public ChatState New(string stateName) => new(ChatId, stateName, isChanged: true);
 
     public static ChatState Default(long chatId) => new(chatId, Constants.DefaultStateName);
 }

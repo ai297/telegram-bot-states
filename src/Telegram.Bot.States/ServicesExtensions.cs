@@ -71,6 +71,7 @@ public static class ServicesExtensions
 
         services.AddSingleton<IUpdateHandler, UpdateHandler>();
         services.AddSingleton<IUpdateProcessingQueue, UpdateProcessingQueue>();
+        services.AddSingleton<IWebhookController, WebhookController>();
         services.AddTransient<IBotSetupService>(sp => new BotSetupService(
             sp.GetRequiredService<ITelegramBotClient>(),
             sp.GetService<ICommandDescriptions>(),

@@ -32,44 +32,39 @@ public static class StateResults
     public static IStateResult CompleteWithNextStep()
         => new CompleteWithNextStepResult();
 
-    internal abstract class StateResult(ICollection<KeyValuePair<string, string?>>? labels)
-        : IStateResult
+    internal abstract class StateResult(ICollection<KeyValuePair<string, string?>>? labels) : IStateResult
     {
         public virtual bool Complete => true;
         public virtual ChatState GetResultState(ChatUpdate _, ChatState state)
-            => labels is null ? state : state.WithLabels(labels);
+            => labels is null ? state.Same() : state.Same().WithLabels(labels);
     }
 
-    internal class CompleteResult(ICollection<KeyValuePair<string, string?>>? labels = null)
-        : StateResult(labels)
+    internal class CompleteResult(ICollection<KeyValuePair<string, string?>>? labels = null) : StateResult(labels)
     {
     }
 
-    internal class ContinueResult(ICollection<KeyValuePair<string, string?>>? labels = null)
-        : StateResult(labels)
+    internal class ContinueResult(ICollection<KeyValuePair<string, string?>>? labels = null) : StateResult(labels)
     {
         public override bool Complete { get; } = false;
     }
 
-    internal class ChangeStateResult(string stateName,
-        ICollection<KeyValuePair<string, string?>>? labels = null)
-        : CompleteResult
+    internal class ChangeStateResult(string stateName, ICollection<KeyValuePair<string, string?>>? labels = null) : CompleteResult
     {
         public override ChatState GetResultState(ChatUpdate _, ChatState state)
-            => new ChatState(state.ChatId, stateName, true).WithLabels(labels);
+            => state.New(stateName).WithLabels(labels);
     }
 
     internal class ContinueWithStepResult(string? stepKey) : ContinueResult
     {
         public readonly string? StepKey = stepKey;
         public override ChatState GetResultState(ChatUpdate _, ChatState state)
-            => state.AddOrUpdateLabel(Constants.StateStepKey, StepKey);
+            => state.Same().AddOrUpdateLabel(Constants.StateStepKey, StepKey);
     }
 
     internal class SetStepAndCompleteResult(string? stepKey) : CompleteResult
     {
         public override ChatState GetResultState(ChatUpdate _, ChatState state)
-            => state.AddOrUpdateLabel(Constants.StateStepKey, stepKey);
+            => state.Same().AddOrUpdateLabel(Constants.StateStepKey, stepKey);
     }
 
     internal class CompleteWithNextStepResult : CompleteResult
@@ -85,6 +80,6 @@ public static class StateResults
         }
 
         public override ChatState GetResultState(ChatUpdate _, ChatState state)
-            => state.AddOrUpdateLabel(Constants.StateStepKey, nextStepKey);
+            => state.Same().AddOrUpdateLabel(Constants.StateStepKey, nextStepKey);
     }
 }

@@ -77,7 +77,7 @@ internal class UpdateHandler(
                         $"with chat id '{state.ChatId}' which is not matching chat id for processing update " +
                         $"('{chatUpdate.Chat.Id}'). New state has not been saved.");
             }
-            while (state.IsChanged || state.StateName != processingStateName);
+            while (state.IsChanged && state.StateName != processingStateName);
 
             if (state.IsDefault && state.Labels.Count == 0)
                 await stateStorage.Delete(state.ChatId);

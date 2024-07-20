@@ -50,7 +50,7 @@ internal class WebhookController(
 
         certificate?.Content.Dispose();
 
-        logger.LogInformation("Tg bot webhook has set to '{adress}'.", webhookAddress);
+        logger.LogInformation($"Tg bot webhook has set to '{{adress}}'.{(dropUpdates ? " Updates dropped." : "")}", webhookAddress);
         isStarted = true;
     }
 

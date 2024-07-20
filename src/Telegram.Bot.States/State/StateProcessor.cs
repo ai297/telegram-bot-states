@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -9,6 +10,7 @@ internal class StateProcessor<TCtx>(
     IStateActionsProvider actionsProvider,
     IStateStepsCollection stepsCollection,
     IStateAction<StateContext>? defaultAction,
+    IServiceProvider serviceProvider,
     ILogger<IStateProcessor> logger)
     : IStateProcessor where TCtx : StateContext
 {
@@ -18,22 +20,22 @@ internal class StateProcessor<TCtx>(
     public async Task<ChatState> Process(ChatUpdate update, ChatState currentState)
     {
         var context = await contextFactory.Create(update, currentState);
-        var resultState = currentState;
+        var resultState = currentState.Same();
         IStateResult processingResult;
 
         // first - process commands or other actions
         if (!currentState.IsChanged)
         {
-            var action = actionsProvider.GetAction(context);
+            var action = actionsProvider.GetAction(context, serviceProvider);
 
             if (action != null)
             {
                 logger.LogDebug("Process {actionType} for chat '{chatId}' in state '{stateName}'...",
-                    update.IsCommand ? "command" : (update.IsCallbackQuery ? "callback query" : "action"),
+                    update.IsCommand ? $"command '{update.Command}'" : (update.IsCallbackQuery ? "callback query" : "action"),
                     update.Chat.Id, currentState.StateName);
 
                 processingResult = await action.Execute(context);
-                resultState = processingResult.GetResultState(update, resultState);
+                resultState = processingResult.GetResultState(update, currentState);
 
                 if (processingResult.Complete) return resultState;
             }
@@ -54,22 +56,21 @@ internal class StateProcessor<TCtx>(
                 stepKey, update.Chat.Id, currentState.StateName);
 
             processingResult = await ProcessStep(context, stepKey);
-            resultState = processingResult.GetResultState(update, resultState);
+            resultState = processingResult.GetResultState(update, currentState);
 
             if (processingResult.Complete) return resultState;
         }
 
+        if (currentState.IsChanged || defaultAction is null)
+            return resultState;
+
         // and last - process default action
-        if (defaultAction is not null && !currentState.IsChanged)
-        {
-            logger.LogDebug("Process default action for chat '{chatId}' in state '{stateName}'...",
-                update.Chat.Id, currentState.StateName);
+        logger.LogDebug("Process default action for chat '{chatId}' in state '{stateName}'...",
+            update.Chat.Id, currentState.StateName);
 
-            processingResult = await defaultAction.Execute(context);
-            resultState = processingResult.GetResultState(update, resultState);
-        }
+        processingResult = await defaultAction.Execute(context);
 
-        return resultState;
+        return processingResult.GetResultState(update, resultState);
     }
 
     private bool ShouldProcessStep(ChatState state, out string? stepKey)
@@ -89,7 +90,7 @@ internal class StateProcessor<TCtx>(
             return AllStepsCompleted;
         }
 
-        var step = stepsCollection.Get(stepKey);
+        var step = stepsCollection.Get(stepKey, serviceProvider);
 
         if (step == null)
         {

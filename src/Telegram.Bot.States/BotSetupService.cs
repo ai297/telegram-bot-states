@@ -40,7 +40,7 @@ internal class BotSetupService(ITelegramBotClient botClient,
         foreach (var group in globalCommands)
             await Task.WhenAll(SetCommands(group, hasMultiLanguageSupport));
 
-        logger.LogInformation("Global commands without special gonditions have been set.");
+        logger.LogInformation("Global commands without special conditions have been set.");
     }
 
     private IEnumerable<Task> SetCommands(IGrouping<string, CommandDescription> commandsGroup, bool hasMultiLanguageSupport)
