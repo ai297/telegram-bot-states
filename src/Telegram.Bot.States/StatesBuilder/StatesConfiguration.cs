@@ -16,7 +16,7 @@ public sealed class StatesConfiguration(IServiceCollection services,
     private readonly ICollection<string> commandLanguages = commandLanguages;
     private readonly string defaultLanguageCode = defaultLanguageCode;
 
-    private CommandsCollectionBuilder<StateContext, IStateAction>? globalCommandsBuilder = null;
+    private CommandsCollectionBuilder<StateContext>? globalCommandsBuilder = null;
 
     private Func<string, MenuButton>? menuButtonFactory = null;
     internal Func<string, MenuButton>? MenuButtonFactory
@@ -85,11 +85,11 @@ public sealed class StatesConfiguration(IServiceCollection services,
         return this;
     }
 
-    public StatesConfiguration ConfigureCommands(Action<CommandsCollectionBuilder<StateContext, IStateAction>> configureCommands)
+    public StatesConfiguration ConfigureCommands(Action<CommandsCollectionBuilder<StateContext>> configureCommands)
     {
         ArgumentNullException.ThrowIfNull(configureCommands);
 
-        globalCommandsBuilder ??= new CommandsCollectionBuilder<StateContext, IStateAction>(services, commandLanguages);
+        globalCommandsBuilder ??= new CommandsCollectionBuilder<StateContext>(services, commandLanguages);
         configureCommands(globalCommandsBuilder);
 
         if (globalCommandsBuilder.Descriptions.Count > 0)
@@ -109,14 +109,14 @@ public sealed class StatesConfiguration(IServiceCollection services,
     }
 
     public StatesConfiguration ConfigureCallbacks<TKey>(Func<StateContext, TKey> keySelector,
-        Action<CallbacksCollectionBuilder<TKey, StateContext, IStateAction>> configureCallbacks)
+        Action<CallbacksCollectionBuilder<TKey, StateContext>> configureCallbacks)
         where TKey : notnull
     {
         ArgumentNullException.ThrowIfNull(keySelector);
         ArgumentNullException.ThrowIfNull(configureCallbacks);
         ThrowIfCallbacksConfigured(services);
 
-        var callbacksBuilder = new CallbacksCollectionBuilder<TKey, StateContext, IStateAction>(services);
+        var callbacksBuilder = new CallbacksCollectionBuilder<TKey, StateContext>(services);
         configureCallbacks(callbacksBuilder);
 
         services.AddKeyedSingleton<IActionFactoriesCollection>(Constants.GlobalCallbackServiceKey,
@@ -178,13 +178,13 @@ public sealed class StatesConfiguration(IServiceCollection services,
         return ConfigureDefaultDataProvider(factory, serviceLifetime);
     }
 
-    public StatesConfiguration ConfigureDefaultAction(Func<IServiceProvider, IStateAction> factory,
+    public StatesConfiguration ConfigureDefaultAction(Func<IServiceProvider, IStateAction<StateContext>> factory,
         ServiceLifetime serviceLifetime = ServiceLifetime.Transient)
     {
         ArgumentNullException.ThrowIfNull(factory);
         ThrowIfDefaultActionRegistered(services);
 
-        services.TryAdd(new ServiceDescriptor(typeof(IAsyncCommand<StateContext, IStateResult>), factory, serviceLifetime));
+        services.TryAdd(new ServiceDescriptor(typeof(IStateAction<StateContext>), factory, serviceLifetime));
 
         return this;
     }
@@ -194,22 +194,21 @@ public sealed class StatesConfiguration(IServiceCollection services,
         ArgumentNullException.ThrowIfNull(@delegate);
         ThrowIfDefaultActionRegistered(services);
 
-        var delegateFactory = DelegateHelper
-            .CreateDelegateFactory<IServiceProvider, Command<StateContext, Task<IStateResult>>>(
-                @delegate, StateBuilderMethods.GetServiceExpr);
+        var delegateFactory = DelegateHelper.CreateDelegateFactory<IServiceProvider, StateAction<StateContext>>(
+            @delegate, StateBuilderMethods.GetServiceExpr);
 
-        services.TryAdd(new ServiceDescriptor(typeof(IAsyncCommand<StateContext, IStateResult>),
-            sp => new AsyncDelegateCommandLazy<StateContext, IStateResult>(sp, delegateFactory),
+        services.TryAdd(new ServiceDescriptor(typeof(IStateAction<StateContext>),
+            sp => new LazyDelegateAction<StateContext>(sp, delegateFactory),
             serviceLifetime));
 
         return this;
     }
 
     public StatesConfiguration ConfigureDefaultAction<T>(ServiceLifetime serviceLifetime = ServiceLifetime.Transient)
-        where T : class, IStateAction
+        where T : class, IStateAction<StateContext>
     {
         ThrowIfDefaultActionRegistered(services);
-        services.TryAdd(new ServiceDescriptor(typeof(IAsyncCommand<StateContext, IStateResult>), typeof(T), serviceLifetime));
+        services.TryAdd(new ServiceDescriptor(typeof(IStateAction<StateContext>), typeof(T), serviceLifetime));
 
         return this;
     }
@@ -244,7 +243,7 @@ public sealed class StatesConfiguration(IServiceCollection services,
 
     private static void ThrowIfDefaultActionRegistered(IServiceCollection services)
     {
-        if (services.Any(d => d.ServiceType == typeof(IAsyncCommand<StateContext, IStateResult>)))
+        if (services.Any(d => d.ServiceType == typeof(IStateAction<StateContext>)))
             throw new InvalidOperationException("Default action has been already registered.");
     }
 }

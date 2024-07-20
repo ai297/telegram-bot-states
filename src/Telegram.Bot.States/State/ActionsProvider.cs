@@ -9,7 +9,7 @@ internal class ActionsProvider(
     string stateName)
     : IStateActionsProvider
 {
-    public IAsyncCommand<StateContext, IStateResult>? GetAction(StateContext context)
+    public IStateAction<StateContext>? GetAction(StateContext context)
     {
         if (context.Update.IsCommand && commandFactories != null) return commandFactories
             .GetApplicableFactoryIfExists(context)

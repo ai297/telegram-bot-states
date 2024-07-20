@@ -3,7 +3,7 @@ using System;
 namespace Telegram.Bot.States;
 
 public sealed class StateActionFactory<TCtx>(
-    StateServiceFactory<IAsyncCommand<TCtx, IStateResult>> factory,
+    StateServiceFactory<IStateAction<TCtx>> factory,
     Func<ChatUpdate, ChatState, bool>? actionCondition = null)
     : IStateActionFactory
     where TCtx : StateContext
@@ -11,6 +11,6 @@ public sealed class StateActionFactory<TCtx>(
     public bool IsApplicable(ChatUpdate update, ChatState state)
         => actionCondition is null || actionCondition(update, state);
 
-    public IAsyncCommand<StateContext, IStateResult> Create(IServiceProvider serviceProvider, string stateName)
-        => (IAsyncCommand<StateContext, IStateResult>)factory(serviceProvider, stateName);
+    public IStateAction<StateContext> Create(IServiceProvider serviceProvider, string stateName)
+        => (IStateAction<StateContext>)factory(serviceProvider, stateName);
 }

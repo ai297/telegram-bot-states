@@ -2,7 +2,6 @@
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.Extensions;
-using Telegram.Bot.Types;
 
 namespace Telegram.Bot.States.Tests.StateConfigurations;
 
@@ -14,7 +13,7 @@ public class DefaultState
         // arrange
         var services = ArrangeHelper.CreateServiceCollection();
 
-        var step = Substitute.For<IStateAction>();
+        var step = Substitute.For<IStateAction<StateContext>>();
         step.Configure()
             .Execute(Arg.Any<StateContext>())
             .Returns(StateResults.Complete());

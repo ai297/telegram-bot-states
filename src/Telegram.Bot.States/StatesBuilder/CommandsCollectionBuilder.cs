@@ -1,15 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Telegram.Bot.States;
 
-public sealed class CommandsCollectionBuilder<TCtx, TAction>
-    where TCtx : StateContext
-    where TAction : IAsyncCommand<TCtx, IStateResult>
+public sealed class CommandsCollectionBuilder<TCtx> where TCtx : StateContext
 {
     private readonly string? stateName;
     private readonly IServiceCollection services;
@@ -27,8 +24,8 @@ public sealed class CommandsCollectionBuilder<TCtx, TAction>
         this.languageCodes = languageCodes;
     }
 
-    public CommandsCollectionBuilder<TCtx, TAction> Add(string command,
-        StateServiceFactory<TAction> actionFactory,
+    public CommandsCollectionBuilder<TCtx> Add(string command,
+        StateServiceFactory<IStateAction<TCtx>> actionFactory,
         Func<string, string>? descriptionProvider = null,
         Func<ChatUpdate, ChatState, bool>? commandCondition = null)
     {
@@ -36,7 +33,7 @@ public sealed class CommandsCollectionBuilder<TCtx, TAction>
         ArgumentNullException.ThrowIfNull(actionFactory);
         ThrowIfCommandConfigured(command);
 
-        Factories.Add(command, new((actionFactory as StateServiceFactory<IAsyncCommand<TCtx, IStateResult>>)!, commandCondition));
+        Factories.Add(command, new(actionFactory, commandCondition));
 
         if (descriptionProvider is not null) Descriptions.AddRange(languageCodes
             .Select(lang => new CommandDescription(command, lang, descriptionProvider(lang), commandCondition))
@@ -45,17 +42,18 @@ public sealed class CommandsCollectionBuilder<TCtx, TAction>
         return this;
     }
 
-    public CommandsCollectionBuilder<TCtx, TAction> Add<T>(string command,
+    public CommandsCollectionBuilder<TCtx> Add<T>(string command,
         Func<string, string>? descriptionProvider = null,
         Func<ChatUpdate, ChatState, bool>? commandCondition = null,
         ServiceLifetime serviceLifetime = ServiceLifetime.Transient)
-        where T : class, TAction
+        where T : class, IStateAction<TCtx>
     {
         services.TryAdd(new ServiceDescriptor(typeof(T), typeof(T), serviceLifetime));
+
         return Add(command, (sp, _) => sp.GetRequiredService<T>(), descriptionProvider, commandCondition);
     }
 
-    public CommandsCollectionBuilder<TCtx, TAction> Add(string command,
+    public CommandsCollectionBuilder<TCtx> Add(string command,
         Delegate @delegate,
         Func<string, string>? descriptionProvider = null,
         Func<ChatUpdate, ChatState, bool>? commandCondition = null)
@@ -64,12 +62,11 @@ public sealed class CommandsCollectionBuilder<TCtx, TAction>
         ArgumentNullException.ThrowIfNull(@delegate);
         ThrowIfCommandConfigured(command);
 
-        var delegateFactory = DelegateHelper
-            .CreateDelegateFactory<IServiceProvider, Command<TCtx, Task<IStateResult>>>(
-                @delegate, (provider, type) => provider.GetRequiredService(type));
+        var delegateFactory = DelegateHelper.CreateDelegateFactory<IServiceProvider, StateAction<TCtx>>(
+            @delegate, (provider, type) => provider.GetRequiredService(type));
 
         Factories.Add(command, new(
-            (serviceProvider, _) => new AsyncDelegateCommand<TCtx, IStateResult>(delegateFactory(serviceProvider)),
+            (serviceProvider, _) => new DelegateAction<TCtx>(delegateFactory(serviceProvider)),
             commandCondition));
 
         if (descriptionProvider is not null) Descriptions.AddRange(languageCodes

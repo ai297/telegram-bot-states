@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Linq.Expressions;
-using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Telegram.Bot.Types;
@@ -12,10 +11,9 @@ internal static class StateBuilderMethods
     public static readonly Expression<Func<IServiceProvider, Type, object>> GetServiceExpr
         = (serviceProvider, type) => serviceProvider.GetRequiredService(type);
 
-    public static TBuilder WithCommands<TBuilder, TCtx, TAction>(TBuilder builder, Action<CommandsCollectionBuilder<TCtx, TAction>> configureCommands)
+    public static TBuilder WithCommands<TBuilder, TCtx>(TBuilder builder, Action<CommandsCollectionBuilder<TCtx>> configureCommands)
         where TCtx : StateContext
-        where TBuilder : StateBuilderBase<TCtx, TAction>
-        where TAction : IAsyncCommand<TCtx, IStateResult>
+        where TBuilder : StateBuilderBase<TCtx>
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configureCommands);
@@ -24,19 +22,18 @@ internal static class StateBuilderMethods
         return builder;
     }
 
-    public static TBuilder WithCallbacks<TBuilder, TCtx, TKey, TAction>(this TBuilder builder,
+    public static TBuilder WithCallbacks<TBuilder, TCtx, TKey>(this TBuilder builder,
         Func<StateContext, TKey> callbackKeySelector,
-        Action<CallbacksCollectionBuilder<TKey, TCtx, TAction>> configureCallbacks)
+        Action<CallbacksCollectionBuilder<TKey, TCtx>> configureCallbacks)
         where TCtx : StateContext
-        where TBuilder : StateBuilderBase<TCtx, TAction>
+        where TBuilder : StateBuilderBase<TCtx>
         where TKey : notnull
-        where TAction : IAsyncCommand<TCtx, IStateResult>
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(callbackKeySelector);
         ArgumentNullException.ThrowIfNull(configureCallbacks);
 
-        var collectionBuilder = new CallbacksCollectionBuilder<TKey, TCtx, TAction>(builder.Services, builder.StateName);
+        var collectionBuilder = new CallbacksCollectionBuilder<TKey, TCtx>(builder.Services, builder.StateName);
         builder.CallbackFactories = new ActionFactoriesCollection<TKey, TCtx>(callbackKeySelector, collectionBuilder.Factories);
 
         configureCallbacks(collectionBuilder);
@@ -44,10 +41,9 @@ internal static class StateBuilderMethods
         return builder;
     }
 
-    public static TBuilder WithSteps<TBuilder, TCtx, TAction>(this TBuilder builder, Action<StateStepsCollection<TCtx, TAction>> configureSteps)
+    public static TBuilder WithSteps<TBuilder, TCtx>(this TBuilder builder, Action<StateStepsCollection<TCtx>> configureSteps)
         where TCtx : StateContext
-        where TAction : IAsyncCommand<TCtx, IStateResult>
-        where TBuilder : StateBuilderBase<TCtx, TAction>
+        where TBuilder : StateBuilderBase<TCtx>
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configureSteps);
@@ -56,11 +52,10 @@ internal static class StateBuilderMethods
         return builder;
     }
 
-    public static TBuilder WithWebAppButton<TBuilder, TCtx, TAction>(this TBuilder builder,
+    public static TBuilder WithWebAppButton<TBuilder, TCtx>(this TBuilder builder,
         Func<string, (string text, string url)> getLocalizedButton)
         where TCtx : StateContext
-        where TBuilder : StateBuilderBase<TCtx, TAction>
-        where TAction : IAsyncCommand<TCtx, IStateResult>
+        where TBuilder : StateBuilderBase<TCtx>
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(getLocalizedButton);
@@ -77,10 +72,9 @@ internal static class StateBuilderMethods
         return builder;
     }
 
-    public static TBuilder WithCommandsMenuButton<TBuilder, TCtx, TAction>(this TBuilder builder)
+    public static TBuilder WithCommandsMenuButton<TBuilder, TCtx>(this TBuilder builder)
         where TCtx : StateContext
-        where TAction : IAsyncCommand<TCtx, IStateResult>
-        where TBuilder : StateBuilderBase<TCtx, TAction>
+        where TBuilder : StateBuilderBase<TCtx>
     {
         ArgumentNullException.ThrowIfNull(builder);
 
@@ -89,42 +83,39 @@ internal static class StateBuilderMethods
         return builder;
     }
 
-    public static TBuilder WithDefaultAction<TBuilder, TCtx, TAction>(this TBuilder builder,
-        StateServiceFactory<TAction> factory)
+    public static TBuilder WithDefaultAction<TBuilder, TCtx>(this TBuilder builder,
+        StateServiceFactory<IStateAction<TCtx>> factory)
         where TCtx : StateContext
-        where TAction : IAsyncCommand<TCtx, IStateResult>
-        where TBuilder : StateBuilderBase<TCtx, TAction>
+        where TBuilder : StateBuilderBase<TCtx>
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(factory);
 
-        builder.DefaultActionFactory = factory as StateServiceFactory<IAsyncCommand<TCtx, IStateResult>>;
+        builder.DefaultActionFactory = factory;
 
         return builder;
     }
 
-    public static TBuilder WithDefaultAction<TBuilder, TCtx, TAction>(this TBuilder builder, Delegate @delegate)
+    public static TBuilder WithDefaultAction<TBuilder, TCtx>(this TBuilder builder, Delegate @delegate)
         where TCtx : StateContext
-        where TAction : IAsyncCommand<TCtx, IStateResult>
-        where TBuilder : StateBuilderBase<TCtx, TAction>
+        where TBuilder : StateBuilderBase<TCtx>
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(@delegate);
 
         var delegateFactory = DelegateHelper
-            .CreateDelegateFactory<IServiceProvider, Command<TCtx, Task<IStateResult>>>(
+            .CreateDelegateFactory<IServiceProvider, StateAction<TCtx>>(
                 @delegate, GetServiceExpr);
 
-        builder.DefaultActionFactory = (sp, _) => new AsyncDelegateCommandLazy<TCtx, IStateResult>(sp, delegateFactory);
+        builder.DefaultActionFactory = (sp, _) => new LazyDelegateAction<TCtx>(sp, delegateFactory);
 
         return builder;
     }
 
-    public static TBuilder WithDefaultAction<TBuilder, TCtx, TAction, T>(this TBuilder builder, ServiceLifetime serviceLifetime)
+    public static TBuilder WithDefaultAction<TBuilder, TCtx, T>(this TBuilder builder, ServiceLifetime serviceLifetime)
         where TCtx : StateContext
-        where TAction : IAsyncCommand<TCtx, IStateResult>
-        where TBuilder : StateBuilderBase<TCtx, TAction>
-        where T : class, TAction
+        where TBuilder : StateBuilderBase<TCtx>
+        where T : class, IStateAction<TCtx>
     {
         ArgumentNullException.ThrowIfNull(builder);
 

@@ -9,9 +9,7 @@ using Telegram.Bot.Types;
 
 namespace Telegram.Bot.States;
 
-public abstract class StateBuilderBase<TCtx, TAction>
-    where TCtx : StateContext
-    where TAction : IAsyncCommand<TCtx, IStateResult>
+public abstract class StateBuilderBase<TCtx> where TCtx : StateContext
 {
     protected readonly ICollection<string> languageCodes;
     protected readonly bool isDefaultState;
@@ -19,13 +17,13 @@ public abstract class StateBuilderBase<TCtx, TAction>
     internal readonly IServiceCollection Services;
     internal readonly string StateName;
 
-    private CommandsCollectionBuilder<TCtx, TAction>? commandsCollectionBuilder = null;
-    internal CommandsCollectionBuilder<TCtx, TAction> CommandsCollectionBuilder => commandsCollectionBuilder
-        ??= new CommandsCollectionBuilder<TCtx, TAction>(Services, languageCodes, StateName);
+    private CommandsCollectionBuilder<TCtx>? commandsCollectionBuilder = null;
+    internal CommandsCollectionBuilder<TCtx> CommandsCollectionBuilder => commandsCollectionBuilder
+        ??= new CommandsCollectionBuilder<TCtx>(Services, languageCodes, StateName);
 
-    private StateStepsCollection<TCtx, TAction>? stepsCollection = null;
-    internal StateStepsCollection<TCtx, TAction> StepsCollection => stepsCollection
-        ??= new StateStepsCollection<TCtx, TAction>(StateName, Services);
+    private StateStepsCollection<TCtx>? stepsCollection = null;
+    internal StateStepsCollection<TCtx> StepsCollection => stepsCollection
+        ??= new StateStepsCollection<TCtx>(StateName, Services);
 
     private Func<string, MenuButton>? menuButtonFactory = null;
     internal Func<string, MenuButton>? MenuButtonFactory
@@ -36,8 +34,8 @@ public abstract class StateBuilderBase<TCtx, TAction>
             : value;
     }
 
-    private StateServiceFactory<IAsyncCommand<TCtx, IStateResult>>? defaultActionFactory = null;
-    internal StateServiceFactory<IAsyncCommand<TCtx, IStateResult>>? DefaultActionFactory
+    private StateServiceFactory<IStateAction<TCtx>>? defaultActionFactory = null;
+    internal StateServiceFactory<IStateAction<TCtx>>? DefaultActionFactory
     {
         get => defaultActionFactory;
         set => defaultActionFactory = defaultActionFactory != null
@@ -114,36 +112,36 @@ public sealed class StateBuilder(string stateName,
     IServiceCollection services,
     ICollection<string> languageCodes,
     bool isDefaultState = false)
-    : StateBuilderBase<StateContext, IStateAction>(stateName, services, languageCodes, isDefaultState)
+    : StateBuilderBase<StateContext>(stateName, services, languageCodes, isDefaultState)
 {
     #region Methods
 
-    public StateBuilder WithCommands(Action<CommandsCollectionBuilder<StateContext, IStateAction>> configureCommands)
+    public StateBuilder WithCommands(Action<CommandsCollectionBuilder<StateContext>> configureCommands)
         => StateBuilderMethods.WithCommands(this, configureCommands);
 
     public StateBuilder WithCallbacks<TKey>(Func<StateContext, TKey> callbackKeySelector,
-        Action<CallbacksCollectionBuilder<TKey, StateContext, IStateAction>> configureCallbacks)
+        Action<CallbacksCollectionBuilder<TKey, StateContext>> configureCallbacks)
         where TKey : notnull
         => StateBuilderMethods.WithCallbacks(this, callbackKeySelector, configureCallbacks);
 
-    public StateBuilder WithSteps(Action<StateStepsCollection<StateContext, IStateAction>> configureSteps)
+    public StateBuilder WithSteps(Action<StateStepsCollection<StateContext>> configureSteps)
         => StateBuilderMethods.WithSteps(this, configureSteps);
 
     public StateBuilder WithWebAppButton(Func<string, (string text, string url)> getLocalizedButton)
-        => StateBuilderMethods.WithWebAppButton<StateBuilder, StateContext, IStateAction>(this, getLocalizedButton);
+        => StateBuilderMethods.WithWebAppButton<StateBuilder, StateContext>(this, getLocalizedButton);
 
     public StateBuilder WithCommandsMenuButton()
-        => StateBuilderMethods.WithCommandsMenuButton<StateBuilder, StateContext, IStateAction>(this);
+        => StateBuilderMethods.WithCommandsMenuButton<StateBuilder, StateContext>(this);
 
-    public StateBuilder WithDefaultAction(StateServiceFactory<IStateAction> factory)
-        => StateBuilderMethods.WithDefaultAction<StateBuilder, StateContext, IStateAction>(this, factory);
+    public StateBuilder WithDefaultAction(StateServiceFactory<IStateAction<StateContext>> factory)
+        => StateBuilderMethods.WithDefaultAction(this, factory);
 
     public StateBuilder WithDefaultAction(Delegate @delegate)
-        => StateBuilderMethods.WithDefaultAction<StateBuilder, StateContext, IStateAction>(this, @delegate);
+        => StateBuilderMethods.WithDefaultAction<StateBuilder, StateContext>(this, @delegate);
 
     public StateBuilder WithDefaultAction<T>(ServiceLifetime serviceLifetime = ServiceLifetime.Scoped)
-        where T : class, IStateAction
-        => StateBuilderMethods.WithDefaultAction<StateBuilder, StateContext, IStateAction, T>(this, serviceLifetime);
+        where T : class, IStateAction<StateContext>
+        => StateBuilderMethods.WithDefaultAction<StateBuilder, StateContext, T>(this, serviceLifetime);
 
     #endregion
 
@@ -157,9 +155,9 @@ public sealed class StateBuilder(string stateName,
         return (serviceProvider, _) => new StateProcessor<StateContext>(
             new StateContextFactory(new Lazy<ITelegramBotClient>(() => serviceProvider.GetRequiredService<ITelegramBotClient>())),
             actionsProviderFactory(serviceProvider),
-            new StepsCollection<StateContext>(serviceProvider, stateSteps),
+            new StepsCollection(serviceProvider, stateSteps),
             defaultActionFactory == null
-                ? serviceProvider.GetService<IAsyncCommand<StateContext, IStateResult>>()
+                ? serviceProvider.GetService<IStateAction<StateContext>>()
                 : defaultActionFactory(serviceProvider, stateName),
             serviceProvider.GetRequiredService<ILogger<IStateProcessor>>());
     }
@@ -169,7 +167,7 @@ public sealed class StateBuilder<TData>(string stateName,
     IServiceCollection services,
     ICollection<string> languageCodes,
     bool isDefaultState = false)
-    : StateBuilderBase<StateContext<TData>, IStateAction<TData>>(stateName, services, languageCodes, isDefaultState)
+    : StateBuilderBase<StateContext<TData>>(stateName, services, languageCodes, isDefaultState)
 {
     private StateServiceFactory<IStateDataProvider<TData>>? dataProviderFactory = null;
     internal StateServiceFactory<IStateDataProvider<TData>>? DataProviderFactory
@@ -182,32 +180,32 @@ public sealed class StateBuilder<TData>(string stateName,
 
     #region Methods
 
-    public StateBuilder<TData> WithCommands(Action<CommandsCollectionBuilder<StateContext<TData>, IStateAction<TData>>> configureCommands)
+    public StateBuilder<TData> WithCommands(Action<CommandsCollectionBuilder<StateContext<TData>>> configureCommands)
         => StateBuilderMethods.WithCommands(this, configureCommands);
 
     public StateBuilder<TData> WithCallbacks<TKey>(Func<StateContext, TKey> callbackKeySelector,
-        Action<CallbacksCollectionBuilder<TKey, StateContext<TData>, IStateAction<TData>>> configureCallbacks)
+        Action<CallbacksCollectionBuilder<TKey, StateContext<TData>>> configureCallbacks)
         where TKey : notnull
         => StateBuilderMethods.WithCallbacks(this, callbackKeySelector, configureCallbacks);
 
-    public StateBuilder<TData> WithSteps(Action<StateStepsCollection<StateContext<TData>, IStateAction<TData>>> configureSteps)
+    public StateBuilder<TData> WithSteps(Action<StateStepsCollection<StateContext<TData>>> configureSteps)
         => StateBuilderMethods.WithSteps(this, configureSteps);
 
     public StateBuilder<TData> WithWebAppButton(Func<string, (string text, string url)> getLocalizedButton)
-        => StateBuilderMethods.WithWebAppButton<StateBuilder<TData>, StateContext<TData>, IStateAction<TData>>(this, getLocalizedButton);
+        => StateBuilderMethods.WithWebAppButton<StateBuilder<TData>, StateContext<TData>>(this, getLocalizedButton);
 
     public StateBuilder<TData> WithCommandsMenuButton()
-        => StateBuilderMethods.WithCommandsMenuButton<StateBuilder<TData>, StateContext<TData>, IStateAction<TData>>(this);
+        => StateBuilderMethods.WithCommandsMenuButton<StateBuilder<TData>, StateContext<TData>>(this);
 
-    public StateBuilder<TData> WithDefaultAction(StateServiceFactory<IStateAction<TData>> factory)
-        => StateBuilderMethods.WithDefaultAction<StateBuilder<TData>, StateContext<TData>, IStateAction<TData>>(this, factory);
+    public StateBuilder<TData> WithDefaultAction(StateServiceFactory<IStateAction<StateContext<TData>>> factory)
+        => StateBuilderMethods.WithDefaultAction(this, factory);
 
     public StateBuilder<TData> WithDefaultAction(Delegate @delegate)
-        => StateBuilderMethods.WithDefaultAction<StateBuilder<TData>, StateContext<TData>, IStateAction<TData>>(this, @delegate);
+        => StateBuilderMethods.WithDefaultAction<StateBuilder<TData>, StateContext<TData>>(this, @delegate);
 
     public StateBuilder<TData> WithDefaultAction<T>(ServiceLifetime serviceLifetime = ServiceLifetime.Scoped)
-        where T : class, IStateAction<TData>
-        => StateBuilderMethods.WithDefaultAction<StateBuilder<TData>, StateContext<TData>, IStateAction<TData>, T>(this, serviceLifetime);
+        where T : class, IStateAction<StateContext<TData>>
+        => StateBuilderMethods.WithDefaultAction<StateBuilder<TData>, StateContext<TData>, T>(this, serviceLifetime);
 
     public StateBuilder<TData> WithDataProvider(StateServiceFactory<IStateDataProvider<TData>> factory)
     {
@@ -261,10 +259,10 @@ public sealed class StateBuilder<TData>(string stateName,
                     : serviceProvider.GetRequiredService<IStateDataProvider<TData>>(),
                 new Lazy<ITelegramBotClient>(() => serviceProvider.GetRequiredService<ITelegramBotClient>())),
             actionsProviderFactory(serviceProvider),
-            new StepsCollection<StateContext<TData>>(serviceProvider, stateSteps),
+            new StepsCollection(serviceProvider, stateSteps),
             defaultActionFactory != null
-                ? (IAsyncCommand<StateContext, IStateResult>)defaultActionFactory(serviceProvider, stateName)
-                : serviceProvider.GetService<IAsyncCommand<StateContext, IStateResult>>(),
+                ? (IStateAction<StateContext>)defaultActionFactory(serviceProvider, stateName)
+                : serviceProvider.GetService<IStateAction<StateContext>>(),
             serviceProvider.GetRequiredService<ILogger<IStateProcessor>>());
     }
 }

@@ -2,19 +2,16 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Telegram.Bot.States;
 
-public sealed class StateStepsCollection<TCtx, TAction> : IEnumerable<StateStepCollectionItem<TCtx>>
-    where TCtx : StateContext
-    where TAction : IAsyncCommand<TCtx, IStateResult>
+public sealed class StateStepsCollection<TCtx> : IEnumerable<StateStepCollectionItem> where TCtx : StateContext
 {
     private readonly string stateName;
     private readonly IServiceCollection services;
-    private readonly List<StateStepCollectionItem<TCtx>> steps = [];
+    private readonly List<StateStepCollectionItem> steps = [];
 
     internal StateStepsCollection(string stateName,
         IServiceCollection services)
@@ -23,42 +20,43 @@ public sealed class StateStepsCollection<TCtx, TAction> : IEnumerable<StateStepC
         this.services = services;
     }
 
-    public StateStepsCollection<TCtx, TAction> Add<TStep>(StateServiceFactory<TStep> stepFactory, string? stepKey = null)
-        where TStep : TAction
+    public StateStepsCollection<TCtx> Add<TStep>(StateServiceFactory<TStep> stepFactory, string? stepKey = null)
+        where TStep : IStateAction<TCtx>
     {
         ArgumentNullException.ThrowIfNull(stepFactory);
 
         var stateName = this.stateName;
 
-        steps.Add(new StateStepCollectionItem<TCtx>(
+        steps.Add(new StateStepCollectionItem(
             GetStepKey(stepKey, typeof(TStep)),
-            sp => stepFactory(sp, stateName)));
+            sp => (IStateAction<StateContext>)stepFactory(sp, stateName)));
 
         return this;
     }
 
-    public StateStepsCollection<TCtx, TAction> Add<TStep>(string? stepKey = null,
+    public StateStepsCollection<TCtx> Add<TStep>(string? stepKey = null,
         ServiceLifetime serviceLifetime = ServiceLifetime.Transient)
-        where TStep : class, TAction
+        where TStep : class, IStateAction<TCtx>
     {
         services.TryAdd(new ServiceDescriptor(typeof(TStep), typeof(TStep), serviceLifetime));
-        steps.Add(new StateStepCollectionItem<TCtx>(
+        steps.Add(new StateStepCollectionItem(
             GetStepKey(stepKey, typeof(TStep)),
-            sp => sp.GetRequiredService<TStep>()));
+            sp => (IStateAction<StateContext>)sp.GetRequiredService<TStep>()));
 
         return this;
     }
 
-    public StateStepsCollection<TCtx, TAction> Add(Delegate @delegate, string? stepKey = null)
+    public StateStepsCollection<TCtx> Add(Delegate @delegate, string? stepKey = null)
     {
-        var delegateFactory = DelegateHelper
-            .CreateDelegateFactory<IServiceProvider, Command<TCtx, Task<IStateResult>>>(
-                @delegate, (provider, type) => provider.GetRequiredService(type));
+        var delegateFactory = DelegateHelper.CreateDelegateFactory<IServiceProvider, StateAction<TCtx>>(
+            @delegate, (provider, type) => provider.GetRequiredService(type));
 
-        Func<IServiceProvider, IAsyncCommand<TCtx, IStateResult>> stepFactory = serviceProvider =>
-            new AsyncDelegateCommand<TCtx, IStateResult>(delegateFactory(serviceProvider));
+        Func<IServiceProvider, IStateAction<TCtx>> stepFactory = serviceProvider =>
+            new DelegateAction<TCtx>(delegateFactory(serviceProvider));
 
-        steps.Add(new StateStepCollectionItem<TCtx>(GetStepKey(stepKey, @delegate.GetType()), stepFactory));
+        steps.Add(new StateStepCollectionItem(
+            GetStepKey(stepKey, @delegate.GetType()),
+            sp => (IStateAction<StateContext>)stepFactory(sp)));
 
         return this;
     }
@@ -78,6 +76,6 @@ public sealed class StateStepsCollection<TCtx, TAction> : IEnumerable<StateStepC
     IEnumerator IEnumerable.GetEnumerator()
         => steps.GetEnumerator();
 
-    IEnumerator<StateStepCollectionItem<TCtx>> IEnumerable<StateStepCollectionItem<TCtx>>.GetEnumerator()
+    IEnumerator<StateStepCollectionItem> IEnumerable<StateStepCollectionItem>.GetEnumerator()
         => steps.GetEnumerator();
 }
