@@ -2,6 +2,6 @@
 
 public interface IActionFactoriesCollection
 {
-    IStateActionFactory? GetApplicableFactoryIfExists(ChatUpdate update, ChatState state);
+    IStateActionFactory? GetApplicableFactoryIfExists(StateContext context);
     internal IActionFactoriesCollection Merge(IActionFactoriesCollection? actionFactories);
 }

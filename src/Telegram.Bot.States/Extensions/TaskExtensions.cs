@@ -5,7 +5,7 @@ namespace Telegram.Bot.States;
 
 public static class TaskExtensions
 {
-    public static Task<TResult> ContinueWithMap<TResult, TData>(this Task<TData> originalTask, Func<TData, TResult> mapper)
+    public static Task<TResult> ContinueWithResult<TResult, TData>(this Task<TData> originalTask, Func<TData, TResult> mapper)
     {
         ArgumentNullException.ThrowIfNull(originalTask);
         ArgumentNullException.ThrowIfNull(mapper);

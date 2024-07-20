@@ -12,8 +12,7 @@ public class DefaultState
     public async Task DefaultActionShouldBeExecuted()
     {
         // arrange
-        var services = new ServiceCollection();
-        services.AddSingleton(Substitute.For<ILogger<IStateProcessor>>());
+        var services = ArrangeHelper.CreateServiceCollection();
 
         var step = Substitute.For<IStateAction>();
         step.Configure()
@@ -25,7 +24,7 @@ public class DefaultState
                 .WithDefaultAction((_, _) => step));
 
         var state = ChatState.Default(1);
-        var update = CreatePrivateMessageUpdate(1, "hello world");
+        var update = ArrangeHelper.CreatePrivateMessageUpdate(1, "hello world");
 
         // act
         var serviceProvider = services.BuildServiceProvider();
@@ -38,22 +37,5 @@ public class DefaultState
         Assert.Equal(state.StateName, result.StateName);
 
         await step.Received().Execute(Arg.Any<StateContext>());
-    }
-
-    private static ChatUpdate CreatePrivateMessageUpdate(long userId, string text)
-    {
-        var user = new User { Id = userId };
-        var chat = new Chat { Id = userId };
-
-        return new ChatUpdate(user, chat, new Update
-        {
-            Message = new Message
-            {
-                From = user,
-                Chat = chat,
-                MessageId = Random.Shared.Next(),
-                Text = text
-            }
-        });
     }
 }

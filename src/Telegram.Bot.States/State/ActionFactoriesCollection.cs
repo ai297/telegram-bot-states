@@ -5,7 +5,7 @@ using System.Collections.ObjectModel;
 namespace Telegram.Bot.States;
 
 internal class ActionFactoriesCollection<TKey, TCtx>(
-    Func<ChatUpdate, TKey> keySelector,
+    Func<StateContext, TKey> keySelector,
     IDictionary<TKey, StateActionFactory<TCtx>> mainActionFactories,
     IActionFactoriesCollection? secondaryActionFactories = null)
     : ReadOnlyDictionary<TKey, StateActionFactory<TCtx>>(mainActionFactories),
@@ -13,14 +13,14 @@ internal class ActionFactoriesCollection<TKey, TCtx>(
     where TKey : notnull
     where TCtx : StateContext
 {
-    public virtual IStateActionFactory? GetApplicableFactoryIfExists(ChatUpdate update, ChatState state)
+    public virtual IStateActionFactory? GetApplicableFactoryIfExists(StateContext context)
     {
-        var key = keySelector(update);
+        var key = keySelector(context);
 
-        if (this.TryGetValue(key, out var actionFactory) && actionFactory.IsApplicable(update, state))
+        if (this.TryGetValue(key, out var actionFactory) && actionFactory.IsApplicable(context.Update, context.State))
             return actionFactory;
 
-        return secondaryActionFactories?.GetApplicableFactoryIfExists(update, state);
+        return secondaryActionFactories?.GetApplicableFactoryIfExists(context);
     }
 
     public IActionFactoriesCollection Merge(IActionFactoriesCollection? actionFactories)

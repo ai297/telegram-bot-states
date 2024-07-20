@@ -121,7 +121,7 @@ public sealed class StateBuilder(string stateName,
     public StateBuilder WithCommands(Action<CommandsCollectionBuilder<StateContext, IStateAction>> configureCommands)
         => StateBuilderMethods.WithCommands(this, configureCommands);
 
-    public StateBuilder WithCallbacks<TKey>(Func<ChatUpdate, TKey> callbackKeySelector,
+    public StateBuilder WithCallbacks<TKey>(Func<StateContext, TKey> callbackKeySelector,
         Action<CallbacksCollectionBuilder<TKey, StateContext, IStateAction>> configureCallbacks)
         where TKey : notnull
         => StateBuilderMethods.WithCallbacks(this, callbackKeySelector, configureCallbacks);
@@ -185,7 +185,7 @@ public sealed class StateBuilder<TData>(string stateName,
     public StateBuilder<TData> WithCommands(Action<CommandsCollectionBuilder<StateContext<TData>, IStateAction<TData>>> configureCommands)
         => StateBuilderMethods.WithCommands(this, configureCommands);
 
-    public StateBuilder<TData> WithCallbacks<TKey>(Func<ChatUpdate, TKey> callbackKeySelector,
+    public StateBuilder<TData> WithCallbacks<TKey>(Func<StateContext, TKey> callbackKeySelector,
         Action<CallbacksCollectionBuilder<TKey, StateContext<TData>, IStateAction<TData>>> configureCallbacks)
         where TKey : notnull
         => StateBuilderMethods.WithCallbacks(this, callbackKeySelector, configureCallbacks);

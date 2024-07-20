@@ -108,7 +108,7 @@ public sealed class StatesConfiguration(IServiceCollection services,
         return this;
     }
 
-    public StatesConfiguration ConfigureCallbacks<TKey>(Func<ChatUpdate, TKey> keySelector,
+    public StatesConfiguration ConfigureCallbacks<TKey>(Func<StateContext, TKey> keySelector,
         Action<CallbacksCollectionBuilder<TKey, StateContext, IStateAction>> configureCallbacks)
         where TKey : notnull
     {

@@ -15,6 +15,6 @@ internal class StateContextFactory<TData>(
     : IStateContextFactory<StateContext<TData>>
 {
     public Task<StateContext<TData>> Create(ChatUpdate chatUpdate, ChatState currentState)
-        => dataProvider.Get(chatUpdate).ContinueWithMap(
+        => dataProvider.Get(chatUpdate).ContinueWithResult(
             data => new StateContext<TData>(data, chatUpdate, currentState, botClientLazy));
 }

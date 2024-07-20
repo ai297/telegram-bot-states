@@ -9,14 +9,14 @@ internal class ActionsProvider(
     string stateName)
     : IStateActionsProvider
 {
-    public IAsyncCommand<StateContext, IStateResult>? GetAction(ChatUpdate update, ChatState state)
+    public IAsyncCommand<StateContext, IStateResult>? GetAction(StateContext context)
     {
-        if (update.IsCommand && commandFactories != null) return commandFactories
-            .GetApplicableFactoryIfExists(update, state)
+        if (context.Update.IsCommand && commandFactories != null) return commandFactories
+            .GetApplicableFactoryIfExists(context)
             ?.Create(serviceProvider, stateName);
 
-        if (update.IsCallbackQuery && callbackFactories != null) return callbackFactories
-            .GetApplicableFactoryIfExists(update, state)
+        if (context.Update.IsCallbackQuery && callbackFactories != null) return callbackFactories
+            .GetApplicableFactoryIfExists(context)
             ?.Create(serviceProvider, stateName);
 
         return null;

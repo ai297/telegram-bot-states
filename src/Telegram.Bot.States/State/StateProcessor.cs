@@ -24,7 +24,7 @@ internal class StateProcessor<TCtx>(
         // first - process commands or other actions
         if (!currentState.IsChanged)
         {
-            var action = actionsProvider.GetAction(update, currentState);
+            var action = actionsProvider.GetAction(context);
 
             if (action != null)
             {

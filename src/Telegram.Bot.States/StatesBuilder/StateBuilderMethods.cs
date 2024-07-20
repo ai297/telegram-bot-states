@@ -25,7 +25,7 @@ internal static class StateBuilderMethods
     }
 
     public static TBuilder WithCallbacks<TBuilder, TCtx, TKey, TAction>(this TBuilder builder,
-        Func<ChatUpdate, TKey> callbackKeySelector,
+        Func<StateContext, TKey> callbackKeySelector,
         Action<CallbacksCollectionBuilder<TKey, TCtx, TAction>> configureCallbacks)
         where TCtx : StateContext
         where TBuilder : StateBuilderBase<TCtx, TAction>
