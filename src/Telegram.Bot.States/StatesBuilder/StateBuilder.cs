@@ -29,7 +29,7 @@ public abstract class StateBuilderBase<TCtx> where TCtx : StateContext
     internal Func<string, MenuButton>? MenuButtonFactory
     {
         get => menuButtonFactory;
-        set => menuButtonFactory = menuButtonFactory != null
+        set => menuButtonFactory = menuButtonFactory != null && value != null
             ? throw new InvalidOperationException($"Menu button for state '{StateName}' has been already configured.")
             : value;
     }
@@ -38,16 +38,16 @@ public abstract class StateBuilderBase<TCtx> where TCtx : StateContext
     internal StateServiceFactory<IStateAction<TCtx>>? DefaultActionFactory
     {
         get => defaultActionFactory;
-        set => defaultActionFactory = defaultActionFactory != null
+        set => defaultActionFactory = defaultActionFactory != null && value != null
             ? throw new InvalidOperationException($"Default action for state '{StateName}' has been already configured.")
             : value;
     }
 
-    private IActionFactoriesCollection? callbackFactories = null;
-    internal IActionFactoriesCollection? CallbackFactories
+    private IActionFactoriesCollection? actionFactories = null;
+    internal IActionFactoriesCollection? ActionFactories
     {
-        get => callbackFactories;
-        set => callbackFactories = callbackFactories != null
+        get => actionFactories;
+        set => actionFactories = actionFactories != null && value != null
             ? throw new InvalidOperationException($"Callback query actions for state '{StateName}' has been already configured.")
             : value;
     }
@@ -69,7 +69,7 @@ public abstract class StateBuilderBase<TCtx> where TCtx : StateContext
         var stateKey = isDefaultState ? null : stateName.AsStateKey();
 
         var stateSteps = StepsCollection.ToArray().AsReadOnly();
-        var callbackFactories = CallbackFactories;
+        var actionFactories = ActionFactories;
         var commandFactories = commandsCollectionBuilder?.Factories != null && commandsCollectionBuilder.Factories.Count > 0
             ? new ActionFactoriesCollection<string, TCtx>(Constants.CommandKeySelector, commandsCollectionBuilder.Factories)
             : null;
@@ -78,7 +78,7 @@ public abstract class StateBuilderBase<TCtx> where TCtx : StateContext
             (sp, _) => new ActionsProvider(stateName,
                 commandFactories?.Merge(sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCommandsServiceKey))
                     ?? sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCommandsServiceKey),
-                callbackFactories?.Merge(sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCallbackServiceKey))
+                actionFactories?.Merge(sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCallbackServiceKey))
                     ?? sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCallbackServiceKey)),
             ServiceLifetime.Singleton));
 
@@ -145,10 +145,10 @@ public sealed class StateBuilder(string stateName,
     public StateBuilder WithCommands(Action<CommandsCollectionBuilder<StateContext>> configureCommands)
         => StateBuilderMethods.WithCommands(this, configureCommands);
 
-    public StateBuilder WithCallbacks<TKey>(Func<StateContext, TKey> callbackKeySelector,
-        Action<CallbacksCollectionBuilder<TKey, StateContext>> configureCallbacks)
+    public StateBuilder WithActions<TKey>(Func<StateContext, TKey> actionKeySelector,
+        Action<ActionsCollectionBuilder<TKey, StateContext>> configureActions)
         where TKey : notnull
-        => StateBuilderMethods.WithCallbacks(this, callbackKeySelector, configureCallbacks);
+        => StateBuilderMethods.WithActions(this, actionKeySelector, configureActions);
 
     public StateBuilder WithSteps(Action<StateStepsCollection<StateContext>> configureSteps)
         => StateBuilderMethods.WithSteps(this, configureSteps);
@@ -195,10 +195,10 @@ public sealed class StateBuilder<TData>(string stateName,
     public StateBuilder<TData> WithCommands(Action<CommandsCollectionBuilder<StateContext<TData>>> configureCommands)
         => StateBuilderMethods.WithCommands(this, configureCommands);
 
-    public StateBuilder<TData> WithCallbacks<TKey>(Func<StateContext, TKey> callbackKeySelector,
-        Action<CallbacksCollectionBuilder<TKey, StateContext<TData>>> configureCallbacks)
+    public StateBuilder<TData> WithActions<TKey>(Func<StateContext, TKey> actionKeySelector,
+        Action<ActionsCollectionBuilder<TKey, StateContext<TData>>> configureActions)
         where TKey : notnull
-        => StateBuilderMethods.WithCallbacks(this, callbackKeySelector, configureCallbacks);
+        => StateBuilderMethods.WithActions(this, actionKeySelector, configureActions);
 
     public StateBuilder<TData> WithSteps(Action<StateStepsCollection<StateContext<TData>>> configureSteps)
         => StateBuilderMethods.WithSteps(this, configureSteps);

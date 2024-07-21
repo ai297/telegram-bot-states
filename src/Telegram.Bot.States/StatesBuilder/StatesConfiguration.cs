@@ -108,16 +108,16 @@ public sealed class StatesConfiguration(IServiceCollection services,
         return this;
     }
 
-    public StatesConfiguration ConfigureCallbacks<TKey>(Func<StateContext, TKey> keySelector,
-        Action<CallbacksCollectionBuilder<TKey, StateContext>> configureCallbacks)
+    public StatesConfiguration ConfigureActions<TKey>(Func<StateContext, TKey> keySelector,
+        Action<ActionsCollectionBuilder<TKey, StateContext>> configureActions)
         where TKey : notnull
     {
         ArgumentNullException.ThrowIfNull(keySelector);
-        ArgumentNullException.ThrowIfNull(configureCallbacks);
+        ArgumentNullException.ThrowIfNull(configureActions);
         ThrowIfCallbacksConfigured(services);
 
-        var callbacksBuilder = new CallbacksCollectionBuilder<TKey, StateContext>(services);
-        configureCallbacks(callbacksBuilder);
+        var callbacksBuilder = new ActionsCollectionBuilder<TKey, StateContext>(services);
+        configureActions(callbacksBuilder);
 
         services.AddKeyedSingleton<IActionFactoriesCollection>(Constants.GlobalCallbackServiceKey,
             new ActionFactoriesCollection<TKey, StateContext>(keySelector, callbacksBuilder.Factories));

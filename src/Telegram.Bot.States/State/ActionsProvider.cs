@@ -4,19 +4,18 @@ namespace Telegram.Bot.States;
 
 internal class ActionsProvider(string stateName,
     IActionFactoriesCollection? commandFactories,
-    IActionFactoriesCollection? callbackFactories)
+    IActionFactoriesCollection? actionFactories)
     : IStateActionsProvider
 {
     public IStateAction<StateContext>? GetAction(StateContext context, IServiceProvider serviceProvider)
     {
-        if (context.Update.IsCommand && commandFactories != null) return commandFactories
-            .GetApplicableFactoryIfExists(context)
-            ?.Create(serviceProvider, stateName);
+        if (context.Update.IsCommand && commandFactories != null)
+            return commandFactories
+                .GetApplicableFactoryIfExists(context)
+                ?.Create(serviceProvider, stateName);
 
-        if (context.Update.IsCallbackQuery && callbackFactories != null) return callbackFactories
-            .GetApplicableFactoryIfExists(context)
+        return actionFactories
+            ?.GetApplicableFactoryIfExists(context)
             ?.Create(serviceProvider, stateName);
-
-        return null;
     }
 }

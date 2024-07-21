@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Telegram.Bot.States;
 
-public sealed class CallbacksCollectionBuilder<TKey, TCtx>
+public sealed class ActionsCollectionBuilder<TKey, TCtx>
     where TKey : notnull
     where TCtx : StateContext
 {
@@ -14,7 +14,7 @@ public sealed class CallbacksCollectionBuilder<TKey, TCtx>
 
     internal readonly Dictionary<TKey, StateActionFactory<TCtx>> Factories = [];
 
-    internal CallbacksCollectionBuilder(
+    internal ActionsCollectionBuilder(
         IServiceCollection services,
         string? stateName = null)
     {
@@ -22,7 +22,7 @@ public sealed class CallbacksCollectionBuilder<TKey, TCtx>
         this.services = services;
     }
 
-    public CallbacksCollectionBuilder<TKey, TCtx> Add(TKey key,
+    public ActionsCollectionBuilder<TKey, TCtx> Add(TKey key,
         StateServiceFactory<IStateAction<TCtx>> actionFactory,
         Func<ChatUpdate, ChatState, bool>? actionCondition = null)
     {
@@ -35,7 +35,7 @@ public sealed class CallbacksCollectionBuilder<TKey, TCtx>
         return this;
     }
 
-    public CallbacksCollectionBuilder<TKey, TCtx> Add<T>(TKey key,
+    public ActionsCollectionBuilder<TKey, TCtx> Add<T>(TKey key,
         Func<ChatUpdate, ChatState, bool>? actionCondition = null,
         ServiceLifetime serviceLifetime = ServiceLifetime.Transient)
         where T : class, IStateAction<TCtx>
@@ -45,7 +45,7 @@ public sealed class CallbacksCollectionBuilder<TKey, TCtx>
         return Add(key, (sp, _) => sp.GetRequiredService<T>(), actionCondition);
     }
 
-    public CallbacksCollectionBuilder<TKey, TCtx> Add(TKey key, Delegate @delegate,
+    public ActionsCollectionBuilder<TKey, TCtx> Add(TKey key, Delegate @delegate,
         Func<ChatUpdate, ChatState, bool>? actionCondition = null)
     {
         ArgumentNullException.ThrowIfNull(key);
@@ -69,6 +69,6 @@ public sealed class CallbacksCollectionBuilder<TKey, TCtx>
         var actionsScope = stateName != null ? $"state '{stateName}'" : "global scope";
 
         throw new ArgumentOutOfRangeException(nameof(key),
-            $"Callback with key '{key}' already configured for {actionsScope}.");
+            $"Action with key '{key}' already configured for {actionsScope}.");
     }
 }

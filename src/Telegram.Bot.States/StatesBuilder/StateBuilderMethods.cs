@@ -22,21 +22,21 @@ internal static class StateBuilderMethods
         return builder;
     }
 
-    public static TBuilder WithCallbacks<TBuilder, TCtx, TKey>(this TBuilder builder,
-        Func<StateContext, TKey> callbackKeySelector,
-        Action<CallbacksCollectionBuilder<TKey, TCtx>> configureCallbacks)
+    public static TBuilder WithActions<TBuilder, TCtx, TKey>(this TBuilder builder,
+        Func<StateContext, TKey> actionKeySelector,
+        Action<ActionsCollectionBuilder<TKey, TCtx>> configureActions)
         where TCtx : StateContext
         where TBuilder : StateBuilderBase<TCtx>
         where TKey : notnull
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(callbackKeySelector);
-        ArgumentNullException.ThrowIfNull(configureCallbacks);
+        ArgumentNullException.ThrowIfNull(actionKeySelector);
+        ArgumentNullException.ThrowIfNull(configureActions);
 
-        var collectionBuilder = new CallbacksCollectionBuilder<TKey, TCtx>(builder.Services, builder.StateName);
-        builder.CallbackFactories = new ActionFactoriesCollection<TKey, TCtx>(callbackKeySelector, collectionBuilder.Factories);
+        var collectionBuilder = new ActionsCollectionBuilder<TKey, TCtx>(builder.Services, builder.StateName);
+        builder.ActionFactories = new ActionFactoriesCollection<TKey, TCtx>(actionKeySelector, collectionBuilder.Factories);
 
-        configureCallbacks(collectionBuilder);
+        configureActions(collectionBuilder);
 
         return builder;
     }
