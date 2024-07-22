@@ -2,12 +2,12 @@ using System;
 
 namespace Telegram.Bot.States;
 
-internal class ActionsProvider(string stateName,
-    IActionFactoriesCollection? commandFactories,
-    IActionFactoriesCollection? actionFactories)
-    : IStateActionsProvider
+internal class ActionsProvider<TCtx>(string stateName,
+    IActionFactoriesCollection<TCtx>? commandFactories,
+    IActionFactoriesCollection<TCtx>? actionFactories)
+    : IStateActionsProvider<TCtx> where TCtx : StateContext
 {
-    public IStateAction<StateContext>? GetAction(StateContext context, IServiceProvider serviceProvider)
+    public IStateAction<TCtx>? GetAction(TCtx context, IServiceProvider serviceProvider)
     {
         if (context.Update.IsCommand && commandFactories != null)
             return commandFactories

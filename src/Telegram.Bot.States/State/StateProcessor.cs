@@ -7,9 +7,9 @@ namespace Telegram.Bot.States;
 
 internal class StateProcessor<TCtx>(
     IStateContextFactory<TCtx> contextFactory,
-    IStateActionsProvider actionsProvider,
+    IStateActionsProvider<TCtx> actionsProvider,
     IStateStepsCollection stepsCollection,
-    IStateAction<StateContext>? defaultAction,
+    IStateAction<TCtx>? defaultAction,
     IServiceProvider serviceProvider,
     ILogger<IStateProcessor> logger)
     : IStateProcessor where TCtx : StateContext

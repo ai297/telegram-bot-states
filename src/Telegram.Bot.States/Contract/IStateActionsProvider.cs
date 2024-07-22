@@ -2,7 +2,7 @@ using System;
 
 namespace Telegram.Bot.States;
 
-public interface IStateActionsProvider
+public interface IStateActionsProvider<in TCtx> where TCtx : StateContext
 {
-    IStateAction<StateContext>? GetAction(StateContext context, IServiceProvider serviceProvider);
+    IStateAction<TCtx>? GetAction(TCtx context, IServiceProvider serviceProvider);
 }

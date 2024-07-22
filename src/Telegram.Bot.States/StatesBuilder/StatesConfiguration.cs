@@ -100,8 +100,8 @@ public sealed class StatesConfiguration(IServiceCollection services,
 
         if (globalCommandsBuilder.Factories.Count > 0)
         {
-            services.RemoveAllKeyed<IActionFactoriesCollection>(Constants.GlobalCommandsServiceKey);
-            services.AddKeyedSingleton<IActionFactoriesCollection>(Constants.GlobalCommandsServiceKey,
+            services.RemoveAllKeyed<IActionFactoriesCollection<StateContext>>(Constants.GlobalCommandsServiceKey);
+            services.AddKeyedSingleton<IActionFactoriesCollection<StateContext>>(Constants.GlobalCommandsServiceKey,
                 new ActionFactoriesCollection<string, StateContext>(Constants.CommandKeySelector, globalCommandsBuilder.Factories));
         }
 
@@ -119,7 +119,7 @@ public sealed class StatesConfiguration(IServiceCollection services,
         var callbacksBuilder = new ActionsCollectionBuilder<TKey, StateContext>(services);
         configureActions(callbacksBuilder);
 
-        services.AddKeyedSingleton<IActionFactoriesCollection>(Constants.GlobalCallbackServiceKey,
+        services.AddKeyedSingleton<IActionFactoriesCollection<StateContext>>(Constants.GlobalCallbackServiceKey,
             new ActionFactoriesCollection<TKey, StateContext>(keySelector, callbacksBuilder.Factories));
 
         return this;
@@ -236,7 +236,7 @@ public sealed class StatesConfiguration(IServiceCollection services,
 
     private static void ThrowIfCallbacksConfigured(IServiceCollection services)
     {
-        if (services.Any(d => d.ServiceType == typeof(IActionFactoriesCollection)
+        if (services.Any(d => d.ServiceType == typeof(IActionFactoriesCollection<StateContext>)
             && string.Equals(Constants.GlobalCallbackServiceKey, d.ServiceKey)))
             throw new InvalidOperationException("Callback query actions have been already configured.");
     }

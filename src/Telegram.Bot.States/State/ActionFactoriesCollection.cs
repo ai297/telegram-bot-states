@@ -7,13 +7,13 @@ namespace Telegram.Bot.States;
 internal class ActionFactoriesCollection<TKey, TCtx>(
     Func<StateContext, TKey> keySelector,
     IDictionary<TKey, StateActionFactory<TCtx>> mainActionFactories,
-    IActionFactoriesCollection? secondaryActionFactories = null)
+    IActionFactoriesCollection<StateContext>? secondaryActionFactories = null)
     : ReadOnlyDictionary<TKey, StateActionFactory<TCtx>>(mainActionFactories),
-    IActionFactoriesCollection
+    IActionFactoriesCollection<TCtx>
     where TKey : notnull
     where TCtx : StateContext
 {
-    public virtual IStateActionFactory? GetApplicableFactoryIfExists(StateContext context)
+    public virtual IStateActionFactory<TCtx>? GetApplicableFactoryIfExists(StateContext context)
     {
         var key = keySelector(context);
 
@@ -23,7 +23,7 @@ internal class ActionFactoriesCollection<TKey, TCtx>(
         return secondaryActionFactories?.GetApplicableFactoryIfExists(context);
     }
 
-    public IActionFactoriesCollection Merge(IActionFactoriesCollection? actionFactories)
+    public IActionFactoriesCollection<TCtx> Merge(IActionFactoriesCollection<StateContext>? actionFactories)
     {
         secondaryActionFactories = secondaryActionFactories != null
             ? secondaryActionFactories.Merge(actionFactories)

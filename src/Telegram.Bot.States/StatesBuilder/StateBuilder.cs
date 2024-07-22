@@ -43,8 +43,8 @@ public abstract class StateBuilderBase<TCtx> where TCtx : StateContext
             : value;
     }
 
-    private IActionFactoriesCollection? actionFactories = null;
-    internal IActionFactoriesCollection? ActionFactories
+    private IActionFactoriesCollection<TCtx>? actionFactories = null;
+    internal IActionFactoriesCollection<TCtx>? ActionFactories
     {
         get => actionFactories;
         set => actionFactories = actionFactories != null && value != null
@@ -74,21 +74,21 @@ public abstract class StateBuilderBase<TCtx> where TCtx : StateContext
             ? new ActionFactoriesCollection<string, TCtx>(Constants.CommandKeySelector, commandsCollectionBuilder.Factories)
             : null;
 
-        Services.Add(new ServiceDescriptor(typeof(IStateActionsProvider), stateKey,
-            (sp, _) => new ActionsProvider(stateName,
-                commandFactories?.Merge(sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCommandsServiceKey))
-                    ?? sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCommandsServiceKey),
-                actionFactories?.Merge(sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCallbackServiceKey))
-                    ?? sp.GetKeyedService<IActionFactoriesCollection>(Constants.GlobalCallbackServiceKey)),
+        Services.Add(new ServiceDescriptor(typeof(IStateActionsProvider<TCtx>), stateKey,
+            (sp, _) => new ActionsProvider<TCtx>(stateName,
+                commandFactories?.Merge(sp.GetKeyedService<IActionFactoriesCollection<StateContext>>(Constants.GlobalCommandsServiceKey))
+                    ?? sp.GetKeyedService<IActionFactoriesCollection<StateContext>>(Constants.GlobalCommandsServiceKey),
+                actionFactories?.Merge(sp.GetKeyedService<IActionFactoriesCollection<StateContext>>(Constants.GlobalCallbackServiceKey))
+                    ?? sp.GetKeyedService<IActionFactoriesCollection<StateContext>>(Constants.GlobalCallbackServiceKey)),
             ServiceLifetime.Singleton));
 
         Services.Add(new ServiceDescriptor(typeof(IStateStepsCollection), stateKey,
             (sp, _) => new StepsCollection(stateSteps),
             ServiceLifetime.Singleton));
 
-        Func<IServiceProvider, IStateActionsProvider> actionsProviderFactory = isDefaultState
-            ? sp => sp.GetRequiredService<IStateActionsProvider>()
-            : sp => sp.GetRequiredKeyedService<IStateActionsProvider>(stateKey);
+        Func<IServiceProvider, IStateActionsProvider<TCtx>> actionsProviderFactory = isDefaultState
+            ? sp => sp.GetRequiredService<IStateActionsProvider<TCtx>>()
+            : sp => sp.GetRequiredKeyedService<IStateActionsProvider<TCtx>>(stateKey);
 
         Func<IServiceProvider, IStateStepsCollection> stepsCollectionFactory = isDefaultState
             ? sp => sp.GetRequiredService<IStateStepsCollection>()

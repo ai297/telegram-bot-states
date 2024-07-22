@@ -37,6 +37,7 @@ public class ChatUpdate(User user, Chat chat, Update update)
         : "";
 
     public bool IsCallbackQuery => Update.Type == UpdateType.CallbackQuery;
+    public bool IsTextMessage => Update.Type == UpdateType.Message && !IsCommand;
     public bool IsCommand => _isCommand
         ??= Update.Type == UpdateType.Message
         && MessageText!.StartsWith(Constants.CommandPrefix);

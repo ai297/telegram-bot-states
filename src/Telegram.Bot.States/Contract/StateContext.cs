@@ -1,10 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot.Args;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Requests.Abstractions;
+using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
+using Telegram.Bot.Types.ReplyMarkups;
 
 namespace Telegram.Bot.States;
 
@@ -48,6 +52,28 @@ public class StateContext(ChatUpdate update, ChatState state, Lazy<ITelegramBotC
         => botClient.Value.MakeRequestAsync(request, cancellationToken);
     public Task<bool> TestApiAsync(CancellationToken cancellationToken = default)
         => botClient.Value.TestApiAsync(cancellationToken);
+
+    public Task<Message> SendTextMessageBack(string text,
+        int? messageThreadId = null,
+        ParseMode? parseMode = null,
+        bool? disableWebPagePreview = null,
+        bool? disableNotification = null,
+        bool? protectContent = null,
+        int? replyToMessageId = null,
+        bool? allowSendingWithoutReply = null,
+        IReplyMarkup? replyMarkup = null,
+        CancellationToken cancellationToken = default)
+        => this.SendTextMessageAsync(Update.ChatId, text,
+            messageThreadId,
+            parseMode,
+            null,
+            disableWebPagePreview,
+            disableNotification,
+            protectContent,
+            replyToMessageId,
+            allowSendingWithoutReply,
+            replyMarkup,
+            cancellationToken);
 
     #endregion
 }
