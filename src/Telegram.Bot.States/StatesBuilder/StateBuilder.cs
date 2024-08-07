@@ -82,17 +82,17 @@ public abstract class StateBuilderBase<TCtx> where TCtx : StateContext
                     ?? sp.GetKeyedService<IActionFactoriesCollection<StateContext>>(Constants.GlobalCallbackServiceKey)),
             ServiceLifetime.Singleton));
 
-        Services.Add(new ServiceDescriptor(typeof(IStateStepsCollection), stateKey,
-            (sp, _) => new StepsCollection(stateSteps),
+        Services.Add(new ServiceDescriptor(typeof(IStateStepsCollection<TCtx>), stateKey,
+            (sp, _) => new StepsCollection<TCtx>(stateSteps),
             ServiceLifetime.Singleton));
 
         Func<IServiceProvider, IStateActionsProvider<TCtx>> actionsProviderFactory = isDefaultState
             ? sp => sp.GetRequiredService<IStateActionsProvider<TCtx>>()
             : sp => sp.GetRequiredKeyedService<IStateActionsProvider<TCtx>>(stateKey);
 
-        Func<IServiceProvider, IStateStepsCollection> stepsCollectionFactory = isDefaultState
-            ? sp => sp.GetRequiredService<IStateStepsCollection>()
-            : sp => sp.GetRequiredKeyedService<IStateStepsCollection>(stateKey);
+        Func<IServiceProvider, IStateStepsCollection<TCtx>> stepsCollectionFactory = isDefaultState
+            ? sp => sp.GetRequiredService<IStateStepsCollection<TCtx>>()
+            : sp => sp.GetRequiredKeyedService<IStateStepsCollection<TCtx>>(stateKey);
 
         Func<IServiceProvider, IStateAction<StateContext>?> defaultActionFactory = DefaultActionFactory == null
             ? sp => sp.GetService<IStateAction<StateContext>>()

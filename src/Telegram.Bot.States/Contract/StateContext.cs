@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,7 +24,7 @@ public class StateContext(ChatUpdate update, ChatState state, Lazy<ITelegramBotC
 
     #region  Bot Client
 
-    public long? BotId => botClient.Value.BotId;
+    public long BotId => botClient.Value.BotId;
     bool ITelegramBotClient.LocalBotServer => botClient.Value.LocalBotServer;
     TimeSpan ITelegramBotClient.Timeout { get => botClient.Value.Timeout; set => botClient.Value.Timeout = value; }
     IExceptionParser ITelegramBotClient.ExceptionsParser
@@ -55,25 +54,34 @@ public class StateContext(ChatUpdate update, ChatState state, Lazy<ITelegramBotC
 
     public Task<Message> SendTextMessageBack(string text,
         int? messageThreadId = null,
-        ParseMode? parseMode = null,
-        bool? disableWebPagePreview = null,
-        bool? disableNotification = null,
-        bool? protectContent = null,
-        int? replyToMessageId = null,
-        bool? allowSendingWithoutReply = null,
+        ParseMode parseMode = ParseMode.None,
+        LinkPreviewOptions? linkPreviewOptions = null,
+        bool disableNotification = false,
+        bool protectContent = false,
+        string? messageEffectId = null,
+        ReplyParameters? replyParameters = null,
         IReplyMarkup? replyMarkup = null,
+        string? businessConnectionId = null,
         CancellationToken cancellationToken = default)
         => this.SendTextMessageAsync(Update.ChatId, text,
-            messageThreadId,
-            parseMode,
-            null,
-            disableWebPagePreview,
-            disableNotification,
-            protectContent,
-            replyToMessageId,
-            allowSendingWithoutReply,
-            replyMarkup,
+            messageThreadId: messageThreadId,
+            parseMode: parseMode,
+            entities: null,
+            linkPreviewOptions: linkPreviewOptions,
+            disableNotification: disableNotification,
+            protectContent: protectContent,
+            messageEffectId: messageEffectId,
+            replyParameters: replyParameters,
+            replyMarkup: replyMarkup,
+            businessConnectionId: businessConnectionId,
             cancellationToken);
+
+    public Task AnswerCallback(string? text = null, bool showAlert = false, string? url = null, int? cacheTime = null,
+        CancellationToken cancellationToken = default)
+        => !Update.IsCallbackQuery
+        ? Task.CompletedTask
+        : this.AnswerCallbackQueryAsync(Update.Update.CallbackQuery!.Id,
+            text, showAlert, url, cacheTime, cancellationToken);
 
     #endregion
 }

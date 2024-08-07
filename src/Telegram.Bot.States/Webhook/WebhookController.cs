@@ -17,9 +17,8 @@ internal class WebhookController(
 
     public async Task Restart(bool dropUpdates, CancellationToken cancellationToken)
     {
-        if (!isStarted) return;
+        if (isStarted) await Stop(dropUpdates, cancellationToken);
 
-        await Stop(dropUpdates, cancellationToken);
         await Start(dropUpdates, cancellationToken);
     }
 

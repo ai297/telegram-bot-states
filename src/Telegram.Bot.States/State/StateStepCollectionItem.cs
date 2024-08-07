@@ -2,8 +2,9 @@ using System;
 
 namespace Telegram.Bot.States;
 
-internal readonly struct StateStepCollectionItem(string key, Func<IServiceProvider, IStateAction<StateContext>> factory)
+internal readonly struct StateStepCollectionItem<TCtx>(string key, Func<IServiceProvider, IStateAction<TCtx>> factory)
+    where TCtx : StateContext
 {
     public readonly string Key = key;
-    public readonly Func<IServiceProvider, IStateAction<StateContext>> Factory = factory;
+    public readonly Func<IServiceProvider, IStateAction<TCtx>> Factory = factory;
 }

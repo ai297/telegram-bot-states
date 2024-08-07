@@ -5,14 +5,31 @@ namespace Telegram.Bot.States;
 
 public static class StateResults
 {
+    /// <summary>
+    /// Complete processing update without changing state.
+    /// </summary>
     public static IStateResult Complete() => new CompleteResult();
+
+    /// <summary>
+    /// Complete processing update without changing state.
+    /// </summary>
     public static IStateResult Complete(params KeyValuePair<string, string?>[] labels)
         => new CompleteResult(labels);
 
+    /// <summary>
+    /// Continue processing update by next step of current state.
+    /// </summary>
     public static IStateResult Continue() => new ContinueResult();
+
+    /// <summary>
+    /// Continue processing update by next step of current state.
+    /// </summary>
     public static IStateResult Continue(params KeyValuePair<string, string?>[] labels)
         => new ContinueResult(labels);
 
+    /// <summary>
+    /// Switch current state to a new one and continue processing update.
+    /// </summary>
     public static IStateResult ChangeState(string stateName,
         params KeyValuePair<string, string?>[] labels)
     {
@@ -20,15 +37,27 @@ public static class StateResults
         return new ChangeStateResult(stateName, labels);
     }
 
+    /// <summary>
+    /// Switch current state to default and continue processing update.
+    /// </summary>
     public static IStateResult ChangeStateToDefault()
         => ChangeState(Constants.DefaultStateName);
 
+    /// <summary>
+    /// Continue processing update by concrete step in current state.
+    /// </summary>
     public static IStateResult ContinueWithStep(string? stepKey)
         => new ContinueWithStepResult(stepKey);
 
+    /// <summary>
+    /// Complete processing update and set concrete step to processing new one.
+    /// </summary>
     public static IStateResult CompleteWithStep(string? stepKey)
         => new SetStepAndCompleteResult(stepKey);
 
+    /// <summary>
+    /// Complete processing update and set next step to processing new one.
+    /// </summary>
     public static IStateResult CompleteWithNextStep()
         => new CompleteWithNextStepResult();
 

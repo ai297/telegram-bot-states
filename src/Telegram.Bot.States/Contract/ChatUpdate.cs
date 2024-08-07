@@ -37,22 +37,16 @@ public class ChatUpdate(User user, Chat chat, Update update)
         : "";
 
     public bool IsCallbackQuery => Update.Type == UpdateType.CallbackQuery;
-    public bool IsTextMessage => Update.Type == UpdateType.Message && !IsCommand;
+    public bool IsTextMessage => Update.Type == UpdateType.Message && !string.IsNullOrEmpty(MessageText) && !IsCommand;
     public bool IsCommand => _isCommand
         ??= Update.Type == UpdateType.Message
-        && MessageText!.StartsWith(Constants.CommandPrefix);
+        && !string.IsNullOrEmpty(MessageText)
+        && MessageText.StartsWith(Constants.CommandPrefix);
 
-    private string GetCommandData()
-    {
-        if (!IsCommand)
-            return string.Empty;
-
-        var data = MessageText
-            ?.Split(Constants.CommandDataSeparatorChar, 2, StringSplitOptions.RemoveEmptyEntries)
-            .Skip(1)
-            .FirstOrDefault()
-            ?.Trim();
-
-        return data ?? "";
-    }
+    private string GetCommandData() => MessageText
+        ?.Split(Constants.CommandDataSeparatorChar, 2, StringSplitOptions.RemoveEmptyEntries)
+        .Skip(1)
+        .FirstOrDefault()
+        ?.Trim()
+        ?? "";
 }

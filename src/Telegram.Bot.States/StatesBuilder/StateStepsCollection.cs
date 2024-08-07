@@ -7,11 +7,11 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Telegram.Bot.States;
 
-public sealed class StateStepsCollection<TCtx> : IEnumerable<StateStepCollectionItem> where TCtx : StateContext
+public sealed class StateStepsCollection<TCtx> : IEnumerable<StateStepCollectionItem<TCtx>> where TCtx : StateContext
 {
     private readonly string stateName;
     private readonly IServiceCollection services;
-    private readonly List<StateStepCollectionItem> steps = [];
+    private readonly List<StateStepCollectionItem<TCtx>> steps = [];
 
     internal StateStepsCollection(string stateName,
         IServiceCollection services)
@@ -26,10 +26,7 @@ public sealed class StateStepsCollection<TCtx> : IEnumerable<StateStepCollection
         ArgumentNullException.ThrowIfNull(stepFactory);
 
         var stateName = this.stateName;
-
-        steps.Add(new StateStepCollectionItem(
-            GetStepKey(stepKey, typeof(TStep)),
-            sp => (IStateAction<StateContext>)stepFactory(sp, stateName)));
+        steps.Add(new StateStepCollectionItem<TCtx>(GetStepKey(stepKey, typeof(TStep)), sp => stepFactory(sp, stateName)));
 
         return this;
     }
@@ -39,9 +36,7 @@ public sealed class StateStepsCollection<TCtx> : IEnumerable<StateStepCollection
         where TStep : class, IStateAction<TCtx>
     {
         services.TryAdd(new ServiceDescriptor(typeof(TStep), typeof(TStep), serviceLifetime));
-        steps.Add(new StateStepCollectionItem(
-            GetStepKey(stepKey, typeof(TStep)),
-            sp => (IStateAction<StateContext>)sp.GetRequiredService<TStep>()));
+        steps.Add(new StateStepCollectionItem<TCtx>(GetStepKey(stepKey, typeof(TStep)), sp => sp.GetRequiredService<TStep>()));
 
         return this;
     }
@@ -54,9 +49,7 @@ public sealed class StateStepsCollection<TCtx> : IEnumerable<StateStepCollection
         Func<IServiceProvider, IStateAction<TCtx>> stepFactory = serviceProvider =>
             new DelegateAction<TCtx>(delegateFactory(serviceProvider));
 
-        steps.Add(new StateStepCollectionItem(
-            GetStepKey(stepKey, @delegate.GetType()),
-            sp => (IStateAction<StateContext>)stepFactory(sp)));
+        steps.Add(new StateStepCollectionItem<TCtx>(GetStepKey(stepKey, @delegate.GetType()), stepFactory));
 
         return this;
     }
@@ -76,6 +69,6 @@ public sealed class StateStepsCollection<TCtx> : IEnumerable<StateStepCollection
     IEnumerator IEnumerable.GetEnumerator()
         => steps.GetEnumerator();
 
-    IEnumerator<StateStepCollectionItem> IEnumerable<StateStepCollectionItem>.GetEnumerator()
+    IEnumerator<StateStepCollectionItem<TCtx>> IEnumerable<StateStepCollectionItem<TCtx>>.GetEnumerator()
         => steps.GetEnumerator();
 }

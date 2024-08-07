@@ -34,4 +34,13 @@ public static class UpdateExtensions
         UpdateType.ChatJoinRequest => update.ChatJoinRequest!.Chat,
         _ => null
     };
+
+    public static Chat ToChat(this User user) => new()
+    {
+        Id = user.Id,
+        Type = ChatType.Private,
+        Username = user.Username,
+        FirstName = user.FirstName,
+        LastName = user.LastName,
+    };
 }

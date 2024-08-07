@@ -18,8 +18,6 @@ internal class UpdateHandler(
             return Task.CompletedTask;
 
         var user = update.GetUser();
-        var chat = update.GetChat();
-
         if (user == null)
         {
             logger.LogError(
@@ -29,14 +27,7 @@ internal class UpdateHandler(
             return Task.CompletedTask;
         }
 
-        if (chat == null)
-        {
-            logger.LogError(
-                "Can't process update '{updateType}' ({updateId}) because chat is null.",
-                update.Type, update.Id);
-
-            return Task.CompletedTask;
-        }
+        var chat = update.GetChat() ?? user.ToChat(); // hack for processing inline queries
 
         return ProcessUpdate(update, user, chat);
     }
