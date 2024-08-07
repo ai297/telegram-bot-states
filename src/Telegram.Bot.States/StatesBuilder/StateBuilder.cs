@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -10,219 +9,262 @@ using Telegram.Bot.Types;
 
 namespace Telegram.Bot.States;
 
-public sealed class StateBuilder<TData>
+public abstract class StateBuilderBase<TCtx> where TCtx : StateContext
 {
-    private static readonly Expression<Func<IServiceProvider, Type, object>> getServiceExpr
-        = (serviceProvider, type) => serviceProvider.GetRequiredService(type);
+    protected readonly ICollection<string> languageCodes;
+    protected readonly bool isDefaultState;
 
-    private readonly string stateName;
-    private readonly IServiceCollection services;
-    private readonly ICollection<string> languageCodes;
-    private readonly bool isDefaultState;
+    internal readonly IServiceCollection Services;
+    internal readonly string StateName;
 
-    private StateActionsCollection<TData>? actionsCollection = null;
-    private Func<IServiceProvider, IStateDataProvider<TData>>? dataProvierFactory = null;
-    private List<StateStepCollectionItem<TData>>? stepsCollection = null;
-    private Func<IServiceProvider, IAsyncCommand<StateContext<TData>, IStateResult>?>? defaultActionFactory = null;
+    private CommandsCollectionBuilder<TCtx>? commandsCollectionBuilder = null;
+    internal CommandsCollectionBuilder<TCtx> CommandsCollectionBuilder => commandsCollectionBuilder
+        ??= new CommandsCollectionBuilder<TCtx>(Services, languageCodes, StateName);
+
+    private StateStepsCollection<TCtx>? stepsCollection = null;
+    internal StateStepsCollection<TCtx> StepsCollection => stepsCollection
+        ??= new StateStepsCollection<TCtx>(StateName, Services);
+
     private Func<string, MenuButton>? menuButtonFactory = null;
+    internal Func<string, MenuButton>? MenuButtonFactory
+    {
+        get => menuButtonFactory;
+        set => menuButtonFactory = menuButtonFactory != null && value != null
+            ? throw new InvalidOperationException($"Menu button for state '{StateName}' has been already configured.")
+            : value;
+    }
 
-    internal StateBuilder(string stateName,
+    private StateServiceFactory<IStateAction<TCtx>>? defaultActionFactory = null;
+    internal StateServiceFactory<IStateAction<TCtx>>? DefaultActionFactory
+    {
+        get => defaultActionFactory;
+        set => defaultActionFactory = defaultActionFactory != null && value != null
+            ? throw new InvalidOperationException($"Default action for state '{StateName}' has been already configured.")
+            : value;
+    }
+
+    private IActionFactoriesCollection<TCtx>? actionFactories = null;
+    internal IActionFactoriesCollection<TCtx>? ActionFactories
+    {
+        get => actionFactories;
+        set => actionFactories = actionFactories != null && value != null
+            ? throw new InvalidOperationException($"Callback query actions for state '{StateName}' has been already configured.")
+            : value;
+    }
+
+    internal StateBuilderBase(string stateName,
         IServiceCollection services,
         ICollection<string> languageCodes,
-        bool isDefaultState = false)
+        bool isDefaultState)
     {
-        this.stateName = stateName;
-        this.services = services;
+        Services = services;
+        StateName = stateName;
         this.languageCodes = languageCodes;
         this.isDefaultState = isDefaultState;
     }
 
-    public StateBuilder<TData> WithActions(Action<StateActionsCollection<TData>> configureActions)
+    internal void BindProcessor()
     {
-        ArgumentNullException.ThrowIfNull(configureActions);
+        var stateName = StateName;
+        var stateKey = isDefaultState ? null : stateName.AsStateKey();
 
-        actionsCollection ??= new StateActionsCollection<TData>(stateName, services, languageCodes);
-        configureActions(actionsCollection);
+        var stateSteps = StepsCollection.ToArray().AsReadOnly();
+        var actionFactories = ActionFactories;
+        var commandFactories = commandsCollectionBuilder?.Factories != null && commandsCollectionBuilder.Factories.Count > 0
+            ? new ActionFactoriesCollection<string, TCtx>(Constants.CommandKeySelector, commandsCollectionBuilder.Factories)
+            : null;
 
-        return this;
+        Services.Add(new ServiceDescriptor(typeof(IStateActionsProvider<TCtx>), stateKey,
+            (sp, _) => new ActionsProvider<TCtx>(stateName,
+                commandFactories?.Merge(sp.GetKeyedService<IActionFactoriesCollection<StateContext>>(Constants.GlobalCommandsServiceKey))
+                    ?? sp.GetKeyedService<IActionFactoriesCollection<StateContext>>(Constants.GlobalCommandsServiceKey),
+                actionFactories?.Merge(sp.GetKeyedService<IActionFactoriesCollection<StateContext>>(Constants.GlobalCallbackServiceKey))
+                    ?? sp.GetKeyedService<IActionFactoriesCollection<StateContext>>(Constants.GlobalCallbackServiceKey)),
+            ServiceLifetime.Singleton));
+
+        Services.Add(new ServiceDescriptor(typeof(IStateStepsCollection<TCtx>), stateKey,
+            (sp, _) => new StepsCollection<TCtx>(stateSteps),
+            ServiceLifetime.Singleton));
+
+        Func<IServiceProvider, IStateActionsProvider<TCtx>> actionsProviderFactory = isDefaultState
+            ? sp => sp.GetRequiredService<IStateActionsProvider<TCtx>>()
+            : sp => sp.GetRequiredKeyedService<IStateActionsProvider<TCtx>>(stateKey);
+
+        Func<IServiceProvider, IStateStepsCollection<TCtx>> stepsCollectionFactory = isDefaultState
+            ? sp => sp.GetRequiredService<IStateStepsCollection<TCtx>>()
+            : sp => sp.GetRequiredKeyedService<IStateStepsCollection<TCtx>>(stateKey);
+
+        Func<IServiceProvider, IStateAction<StateContext>?> defaultActionFactory = DefaultActionFactory == null
+            ? sp => sp.GetService<IStateAction<StateContext>>()
+            : sp =>  (IStateAction<StateContext>)DefaultActionFactory(sp, stateName);
+
+        var contextFactory = GetContextFactory();
+
+        Services.Add(new ServiceDescriptor(typeof(IStateProcessor), stateKey,
+            (serviceProvider, _) => new StateProcessor<TCtx>(
+                contextFactory(serviceProvider),
+                actionsProviderFactory(serviceProvider),
+                stepsCollectionFactory(serviceProvider),
+                defaultActionFactory(serviceProvider),
+                serviceProvider,
+                serviceProvider.GetRequiredService<ILogger<IStateProcessor>>()),
+            ServiceLifetime.Scoped));
     }
 
-    public StateBuilder<TData> WithSteps(Action<StateStepsCollection<TData>> configureSteps)
+    protected abstract Func<IServiceProvider, IStateContextFactory<TCtx>> GetContextFactory();
+
+    internal virtual void BindSetupService(string defaultLanguageCode)
     {
-        ArgumentNullException.ThrowIfNull(configureSteps);
+        var stateKey = isDefaultState ? null : StateName.AsStateKey();
+        var allLanguageCodes = languageCodes.Append(defaultLanguageCode).Distinct().ToArray();
+        var stateCommandDescriptions = commandsCollectionBuilder != null && commandsCollectionBuilder.Descriptions.Count > 0
+            ? new CommandDescriptions(commandsCollectionBuilder.Descriptions)
+            : null;
 
-        var stepsCofiguration = new StateStepsCollection<TData>(stateName, services);
-        configureSteps(stepsCofiguration);
+        Services.Add(new ServiceDescriptor(typeof(IStateSetupService), stateKey, SetupServiceFactory, ServiceLifetime.Scoped));
 
-        stepsCollection ??= new(stepsCofiguration.Count);
-        stepsCollection.AddRange(stepsCofiguration);
-
-        return this;
+        IStateSetupService SetupServiceFactory(IServiceProvider serviceProvider, object? _) => new StateSetupService(
+            serviceProvider.GetRequiredService<ITelegramBotClient>(),
+            serviceProvider.GetService<ICommandDescriptions>(),
+            stateCommandDescriptions,
+            allLanguageCodes,
+            defaultLanguageCode,
+            serviceProvider.GetRequiredService<ILogger<StateSetupService>>(),
+            menuButtonFactory);
     }
+}
 
-    #region Menu button
-    public StateBuilder<TData> WithWebAppButton(Func<string, (string text, string url)> getLocalizedButton)
-    {
-        ArgumentNullException.ThrowIfNull(getLocalizedButton);
+public sealed class StateBuilder(string stateName,
+    IServiceCollection services,
+    ICollection<string> languageCodes,
+    bool isDefaultState = false)
+    : StateBuilderBase<StateContext>(stateName, services, languageCodes, isDefaultState)
+{
+    #region Methods
 
-        if (menuButtonFactory != null) throw new InvalidOperationException(
-            $"Menu button for state '{stateName}' has been already configured.");
+    public StateBuilder WithCommands(Action<CommandsCollectionBuilder<StateContext>> configureCommands)
+        => StateBuilderMethods.WithCommands(this, configureCommands);
 
-        menuButtonFactory = languageCode => {
-            var (text, url) = getLocalizedButton(languageCode);
-            return new MenuButtonWebApp {
-                Text = text,
-                WebApp = new WebAppInfo {
-                    Url = url,
-                },
-            };
-        };
+    public StateBuilder WithActions<TKey>(Func<StateContext, TKey> actionKeySelector,
+        Action<ActionsCollectionBuilder<TKey, StateContext>> configureActions)
+        where TKey : notnull
+        => StateBuilderMethods.WithActions(this, actionKeySelector, configureActions);
 
-        return this;
-    }
+    public StateBuilder WithSteps(Action<StateStepsCollection<StateContext>> configureSteps)
+        => StateBuilderMethods.WithSteps(this, configureSteps);
 
-    public StateBuilder<TData> WithCommandsMenuButton()
-    {
-        if (menuButtonFactory != null) throw new InvalidOperationException(
-            $"Menu button for state '{stateName}' has been already configured.");
+    public StateBuilder WithWebAppButton(Func<string, (string text, string url)> getLocalizedButton)
+        => StateBuilderMethods.WithWebAppButton<StateBuilder, StateContext>(this, getLocalizedButton);
 
-        menuButtonFactory = _ => new MenuButtonCommands();
+    public StateBuilder WithCommandsMenuButton()
+        => StateBuilderMethods.WithCommandsMenuButton<StateBuilder, StateContext>(this);
 
-        return this;
-    }
+    public StateBuilder WithDefaultAction(StateServiceFactory<IStateAction<StateContext>> factory)
+        => StateBuilderMethods.WithDefaultAction(this, factory);
+
+    public StateBuilder WithDefaultAction(Delegate @delegate)
+        => StateBuilderMethods.WithDefaultAction<StateBuilder, StateContext>(this, @delegate);
+
+    public StateBuilder WithDefaultAction<T>(ServiceLifetime serviceLifetime = ServiceLifetime.Scoped)
+        where T : class, IStateAction<StateContext>
+        => StateBuilderMethods.WithDefaultAction<StateBuilder, StateContext, T>(this, serviceLifetime);
+
     #endregion
 
-    #region Custom data provider
-    public StateBuilder<TData> WithDataProvider(
-        StateServiceFactory<IStateDataProvider<TData>> factory)
+    protected override Func<IServiceProvider, IStateContextFactory<StateContext>> GetContextFactory()
+        => sp => new StateContextFactory(new Lazy<ITelegramBotClient>(() => sp.GetRequiredService<ITelegramBotClient>()));
+}
+
+public sealed class StateBuilder<TData>(string stateName,
+    IServiceCollection services,
+    ICollection<string> languageCodes,
+    bool isDefaultState = false)
+    : StateBuilderBase<StateContext<TData>>(stateName, services, languageCodes, isDefaultState)
+{
+    private StateServiceFactory<IStateDataProvider<TData>>? dataProviderFactory = null;
+    internal StateServiceFactory<IStateDataProvider<TData>>? DataProviderFactory
+    {
+        get => dataProviderFactory;
+        set => dataProviderFactory = dataProviderFactory != null
+            ? throw new InvalidOperationException($"Data provider for state '{StateName}' has beern already configured.")
+            : value;
+    }
+
+    #region Methods
+
+    public StateBuilder<TData> WithCommands(Action<CommandsCollectionBuilder<StateContext<TData>>> configureCommands)
+        => StateBuilderMethods.WithCommands(this, configureCommands);
+
+    public StateBuilder<TData> WithActions<TKey>(Func<StateContext, TKey> actionKeySelector,
+        Action<ActionsCollectionBuilder<TKey, StateContext<TData>>> configureActions)
+        where TKey : notnull
+        => StateBuilderMethods.WithActions(this, actionKeySelector, configureActions);
+
+    public StateBuilder<TData> WithSteps(Action<StateStepsCollection<StateContext<TData>>> configureSteps)
+        => StateBuilderMethods.WithSteps(this, configureSteps);
+
+    public StateBuilder<TData> WithWebAppButton(Func<string, (string text, string url)> getLocalizedButton)
+        => StateBuilderMethods.WithWebAppButton<StateBuilder<TData>, StateContext<TData>>(this, getLocalizedButton);
+
+    public StateBuilder<TData> WithCommandsMenuButton()
+        => StateBuilderMethods.WithCommandsMenuButton<StateBuilder<TData>, StateContext<TData>>(this);
+
+    public StateBuilder<TData> WithDefaultAction(StateServiceFactory<IStateAction<StateContext<TData>>> factory)
+        => StateBuilderMethods.WithDefaultAction(this, factory);
+
+    public StateBuilder<TData> WithDefaultAction(Delegate @delegate)
+        => StateBuilderMethods.WithDefaultAction<StateBuilder<TData>, StateContext<TData>>(this, @delegate);
+
+    public StateBuilder<TData> WithDefaultAction<T>(ServiceLifetime serviceLifetime = ServiceLifetime.Scoped)
+        where T : class, IStateAction<StateContext<TData>>
+        => StateBuilderMethods.WithDefaultAction<StateBuilder<TData>, StateContext<TData>, T>(this, serviceLifetime);
+
+    public StateBuilder<TData> WithDataProvider(StateServiceFactory<IStateDataProvider<TData>> factory)
     {
         ArgumentNullException.ThrowIfNull(factory);
 
-        var stateName = this.stateName;
+        DataProviderFactory = factory;
 
-        if (dataProvierFactory != null) throw new InvalidOperationException(
-            $"Data provider for state '{stateName}' has beern already configured.");
-
-        dataProvierFactory = sp => factory(sp, stateName);
         return this;
     }
 
-    public StateBuilder<TData> WithDataProvider<T>()
+    public StateBuilder<TData> WithDataProvider<T>(ServiceLifetime serviceLifetime = ServiceLifetime.Scoped)
         where T : class, IStateDataProvider<TData>
     {
-        if (dataProvierFactory != null) throw new InvalidOperationException(
-            $"Data provider for state '{stateName}' has been already configured.");
+        DataProviderFactory = (sp, _) => sp.GetRequiredService<T>();
+        Services.TryAdd(new ServiceDescriptor(typeof(T), typeof(T), serviceLifetime));
 
-        services.TryAddScoped<T>();
-        dataProvierFactory = sp => sp.GetRequiredService<T>();
         return this;
     }
 
     /// <summary>
     /// Your <paramref name="@delegate" /> can receive <seealso cref="Telegram.Bot.States.ChatUpdate" />
-    /// as parameter and  must return ValueTask&lt;<typeparamref name="TData" />&rt; as result.
+    /// as parameter and  must return Task&lt;<typeparamref name="TData" />&rt; as result.
     /// </summary>
     public StateBuilder<TData> WithDataProvider(Delegate @delegate)
     {
-        var stateName = this.stateName;
-
-        if (dataProvierFactory != null) throw new InvalidOperationException(
-            $"Data provider for state '{stateName}' has been already configured.");
+        ArgumentNullException.ThrowIfNull(@delegate);
 
         var delegateFactory = DelegateHelper
             .CreateDelegateFactory<IServiceProvider,Func<ChatUpdate, Task<TData>>>(
-                @delegate, getServiceExpr);
+                @delegate, StateBuilderMethods.GetServiceExpr);
 
-        dataProvierFactory = sp => new DelegateDataProvider<TData>(delegateFactory(sp));
+        DataProviderFactory = (sp, _) => new DelegateDataProvider<TData>(delegateFactory(sp));
+
         return this;
     }
+
     #endregion
 
-    #region Default Action
-    public StateBuilder<TData> WithDefaultAction(
-        StateServiceFactory<IStateStep<TData>> factory)
+    protected override Func<IServiceProvider, IStateContextFactory<StateContext<TData>>> GetContextFactory()
     {
-        ArgumentNullException.ThrowIfNull(factory);
+        var stateName = StateName;
+        var dataProviderFactory = DataProviderFactory;
 
-        var stateName = this.stateName;
-
-        if (defaultActionFactory != null) throw new InvalidOperationException(
-            $"Default action for state '{stateName}' has been already configured.");
-
-        defaultActionFactory = sp => factory(sp, stateName);
-
-        return this;
+        return dataProviderFactory != null
+            ? sp => new StateContextFactory<TData>(dataProviderFactory(sp, stateName),
+                new Lazy<ITelegramBotClient>(() => sp.GetRequiredService<ITelegramBotClient>()))
+            : sp => new StateContextFactory<TData>(sp.GetRequiredService<IStateDataProvider<TData>>(),
+                new Lazy<ITelegramBotClient>(() => sp.GetRequiredService<ITelegramBotClient>()));
     }
-
-    public StateBuilder<TData> WithDefaultAction<T>() where T : class, IStateStep<TData>
-    {
-        if (defaultActionFactory != null) throw new InvalidOperationException(
-            $"Default action for state '{stateName}' has already configured.");
-
-        services.TryAddTransient<T>();
-        defaultActionFactory = sp => sp.GetRequiredService<T>();
-
-        return this;
-    }
-
-    public StateBuilder<TData> WithDefaultAction(Delegate @delegate)
-    {
-        if (defaultActionFactory != null) throw new InvalidOperationException(
-            $"Default action for state '{stateName}' has already configured.");
-
-        var delegateFactory = DelegateHelper
-            .CreateDelegateFactory<IServiceProvider, Command<StateContext<TData>, Task<IStateResult>>>(
-                @delegate, getServiceExpr);
-
-        defaultActionFactory = sp => new AsyncDelegateCommandLazy<StateContext<TData>, IStateResult>(sp, delegateFactory);
-
-        return this;
-    }
-    #endregion
-
-    #region Bindings
-    internal void BindProcessor()
-    {
-        Func<IServiceProvider, IStateActionsProvider<TData>> actionsProviderFactory = actionsCollection != null
-            ? sp => new ActionsProvider<TData>(actionsCollection, sp, stateName)
-            : sp => new NoActionsProvider<TData>();
-
-        var dataProviderFactory = this.dataProvierFactory
-            ?? (sp => sp.GetRequiredService<IStateDataProvider<TData>>());
-
-        var defaultActionFactory = this.defaultActionFactory
-            ?? (_ => null);
-
-        var stateSteps = stepsCollection ?? [];
-
-        Func<IServiceProvider, object?, IStateProcessor> processorFactory =
-            (serviceProvider, _) => new StateProcessor<TData>(
-                dataProviderFactory(serviceProvider),
-                actionsProviderFactory(serviceProvider),
-                new StepsCollection<TData>(serviceProvider, stateSteps),
-                defaultActionFactory(serviceProvider),
-                serviceProvider);
-
-        var stateKey = isDefaultState ? null : stateName.AsStateKey();
-        services.Add(new ServiceDescriptor(typeof(IStateProcessor), stateKey, processorFactory, ServiceLifetime.Scoped));
-    }
-
-    internal void BindSetupService(string defaultLanguageCode)
-    {
-        var stateKey = isDefaultState ? null : stateName.AsStateKey();
-        var commandDescriptions = actionsCollection?.CommandDescriptions;
-        var allLanguageCodes = languageCodes.Append(defaultLanguageCode).Distinct().ToArray();
-
-        Func<IServiceProvider, object?, IStateSetupService> setupServiceFactory =
-            (serviceProvider, _) => new StateSetupService(
-                serviceProvider.GetRequiredService<ITelegramBotClient>(),
-                commandDescriptions,
-                allLanguageCodes,
-                defaultLanguageCode,
-                serviceProvider.GetRequiredService<ILogger<StateSetupService>>(),
-                menuButtonFactory);
-
-        services.Add(new ServiceDescriptor(typeof(IStateSetupService), stateKey, setupServiceFactory, ServiceLifetime.Scoped));
-    }
-    #endregion
 }

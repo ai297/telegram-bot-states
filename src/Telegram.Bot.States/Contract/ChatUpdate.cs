@@ -15,32 +15,38 @@ public class ChatUpdate(User user, Chat chat, Update update)
     public User User { get; } = user;
     public Chat Chat { get; } = chat;
     public Update Update { get; } = update;
-
     public ChatId ChatId => _chatId ??= Chat;
-    public string MessageText => Update.Message?.Text ?? string.Empty;
-    public int? MessageId => Update.Message?.MessageId;
-    public string CallbackData => Update.CallbackQuery?.Data ?? string.Empty;
+
+    public string? MessageText => Update.Message?.Text
+        ?? Update.CallbackQuery?.Message?.Text
+        ?? Update.EditedMessage?.Text
+        ?? Update.ChannelPost?.Text
+        ?? Update.EditedChannelPost?.Text;
+
+    public int? MessageId => Update.Message?.MessageId
+        ?? Update.CallbackQuery?.Message?.MessageId
+        ?? Update.EditedMessage?.MessageId
+        ?? Update.ChannelPost?.MessageId
+        ?? Update.EditedChannelPost?.MessageId;
+
+    public string CallbackData => Update.CallbackQuery?.Data ?? "";
     public bool IsPrivateChat => Chat.Type == ChatType.Private;
     public string CommandData => _commandData ??= GetCommandData();
     public string Command => _command ??= IsCommand
-        ? MessageText.Split(Constants.CommandSeparatorChars).First()[1..].ToLower()
-        : string.Empty;
+        ? MessageText!.Split(Constants.CommandSeparatorChars).First()[1..].ToLower()
+        : "";
 
+    public bool IsCallbackQuery => Update.Type == UpdateType.CallbackQuery;
+    public bool IsTextMessage => Update.Type == UpdateType.Message && !string.IsNullOrEmpty(MessageText) && !IsCommand;
     public bool IsCommand => _isCommand
         ??= Update.Type == UpdateType.Message
+        && !string.IsNullOrEmpty(MessageText)
         && MessageText.StartsWith(Constants.CommandPrefix);
 
-    private string GetCommandData()
-    {
-        if (!IsCommand)
-            return string.Empty;
-
-        var data = MessageText
-            ?.Split(Constants.CommandDataSeparatorChar, 2, StringSplitOptions.RemoveEmptyEntries)
-            .Skip(1)
-            .FirstOrDefault()
-            ?.Trim();
-
-        return data ?? string.Empty;
-    }
+    private string GetCommandData() => MessageText
+        ?.Split(Constants.CommandDataSeparatorChar, 2, StringSplitOptions.RemoveEmptyEntries)
+        .Skip(1)
+        .FirstOrDefault()
+        ?.Trim()
+        ?? "";
 }

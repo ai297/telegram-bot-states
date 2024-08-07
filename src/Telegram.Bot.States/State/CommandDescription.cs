@@ -2,22 +2,14 @@ using System;
 
 namespace Telegram.Bot.States;
 
-internal struct CommandDescription
+public sealed class CommandDescription(string command, string languageCode, string description,
+    Func<ChatUpdate, ChatState, bool>? commandCondition = null)
 {
-    private readonly Func<ChatUpdate, ChatState, bool> commandCondition;
+    public readonly string Command = command;
+    public readonly string LanguageCode = languageCode;
+    public readonly string Description = description;
+    public readonly bool WithoutCondition = commandCondition is null;
 
-    public readonly string Command;
-    public readonly string LanguageCode;
-    public readonly string Description;
-
-    public CommandDescription(string command, string languageCode, string description,
-        Func<ChatUpdate, ChatState, bool> commandCondition)
-    {
-        Command = command;
-        LanguageCode = languageCode;
-        Description = description;
-        this.commandCondition = commandCondition;
-    }
-
-    public bool IsApplicable(ChatUpdate update, ChatState state) => commandCondition(update, state);
+    public bool IsApplicable(ChatUpdate update, ChatState state)
+        => WithoutCondition || commandCondition!(update, state);
 }

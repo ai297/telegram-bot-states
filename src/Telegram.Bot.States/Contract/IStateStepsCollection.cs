@@ -1,8 +1,10 @@
+using System;
+
 namespace Telegram.Bot.States;
 
-public interface IStateStepsCollection<TData>
+public interface IStateStepsCollection<in TCtx> where TCtx : StateContext
 {
-    IAsyncCommand<StateContext<TData>, IStateResult>? Get(string stepKey);
+    IStateAction<TCtx>? Get(string stepKey, IServiceProvider serviceProvider);
     string? GetFirstStepKey();
     string? GetNextStepKey(string currentStepKey);
     int Count { get; }

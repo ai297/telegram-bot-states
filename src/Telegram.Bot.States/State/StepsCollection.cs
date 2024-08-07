@@ -4,14 +4,13 @@ using System.Linq;
 
 namespace Telegram.Bot.States;
 
-internal class StepsCollection<TData>(
-    IServiceProvider serviceProvider,
-    IReadOnlyList<StateStepCollectionItem<TData>> stateSteps)
-    : IStateStepsCollection<TData>
+internal class StepsCollection<TCtx>(IReadOnlyList<StateStepCollectionItem<TCtx>> stateSteps)
+    : IStateStepsCollection<TCtx>
+    where TCtx : StateContext
 {
     public int Count => stateSteps.Count;
 
-    public IAsyncCommand<StateContext<TData>, IStateResult>? Get(string stepKey)
+    public IStateAction<TCtx>? Get(string stepKey, IServiceProvider serviceProvider)
     {
         var factory = stateSteps.FirstOrDefault(s => s.Key == stepKey).Factory;
 

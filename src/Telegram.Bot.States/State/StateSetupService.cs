@@ -8,20 +8,27 @@ using Telegram.Bot.Types;
 namespace Telegram.Bot.States;
 
 internal class StateSetupService(ITelegramBotClient botClient,
-    IReadOnlyCollection<CommandDescription>? commandDescriptions,
+    ICommandDescriptions? globalCommandDescriptions,
+    ICommandDescriptions? stateCommandDescriptions,
     IReadOnlyCollection<string> allLanguageCodes,
     string defaultLanguageCode,
     ILogger<StateSetupService> logger,
     Func<string, MenuButton>? getMenuButton = null)
     : IStateSetupService
 {
-    public Task Setup(ChatState chatState, ChatUpdate update)
+    public async Task Setup(ChatState chatState, ChatUpdate update)
     {
-        var hasNoCommands = commandDescriptions == null || commandDescriptions.Count == 0;
+        var hasNoCommands = !(globalCommandDescriptions != null && globalCommandDescriptions.Count > 0)
+                         && !(stateCommandDescriptions != null && stateCommandDescriptions.Count > 0);
 
-        var menuButton = getMenuButton != null
-            ? getMenuButton(update.User.LanguageCode ?? defaultLanguageCode)
-            : (hasNoCommands ? new MenuButtonDefault() : new MenuButtonCommands());
+        if (getMenuButton != null)
+        {
+            logger.LogDebug(
+                "Menu button for chat '{chatId}' will be updated for state '{stateName}'...",
+                chatState.ChatId, chatState.StateName);
+
+            await botClient.SetChatMenuButtonAsync(chatState.ChatId, getMenuButton(update.User.LanguageCode ?? defaultLanguageCode));
+        }
 
         var scope = BotCommandScope.Chat(chatState.ChatId);
         var hasMultiLanguageSupport = allLanguageCodes.Count > 1;
@@ -33,27 +40,30 @@ internal class StateSetupService(ITelegramBotClient botClient,
                 "'{chatId}' will be removed...",
                 chatState.StateName, chatState.ChatId);
 
-            return hasMultiLanguageSupport
-                ? Task.WhenAll(allLanguageCodes
-                    .Select(language => botClient.DeleteMyCommandsAsync(scope, language))
-                    .Append(botClient.DeleteMyCommandsAsync(scope))
-                    .Append(botClient.SetChatMenuButtonAsync(chatState.ChatId, menuButton)))
-                : Task.WhenAll(
-                    botClient.DeleteMyCommandsAsync(scope),
-                    botClient.SetChatMenuButtonAsync(chatState.ChatId, menuButton));
+            await botClient.DeleteMyCommandsAsync(scope);
+
+            foreach (var languageCode in allLanguageCodes)
+            {
+                await botClient.DeleteMyCommandsAsync(scope, languageCode);
+            }
+
+            return;
         }
 
         logger.LogDebug(
             "Commands menu for chat '{chatId}' will be updated for state '{stateName}'...",
             chatState.ChatId, chatState.StateName);
 
-        var groupedCommands = commandDescriptions!
-            .Where(c => c.IsApplicable(update, chatState))
-            .GroupBy(c => c.LanguageCode, StringComparer.OrdinalIgnoreCase);
+        var applicableCommands = (stateCommandDescriptions ?? Enumerable.Empty<CommandDescription>())
+            .Concat(globalCommandDescriptions ?? Enumerable.Empty<CommandDescription>())
+            .GroupBy(cd => cd.Command, (_, group) => group.FirstOrDefault(c => c.IsApplicable(update, chatState)))
+            .Where(c => c != null)
+            .GroupBy(c => c!.LanguageCode, StringComparer.OrdinalIgnoreCase);
 
-        return Task.WhenAll(groupedCommands
-            .SelectMany(group => SetCommands(group, scope, hasMultiLanguageSupport))
-            .Append(botClient.SetChatMenuButtonAsync(chatState.ChatId, menuButton)));
+        foreach (var group in applicableCommands)
+        {
+            await Task.WhenAll(SetCommands(group!, scope, hasMultiLanguageSupport));
+        }
     }
 
     private IEnumerable<Task> SetCommands(IGrouping<string, CommandDescription> commandsGroup,

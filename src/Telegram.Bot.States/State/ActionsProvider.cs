@@ -1,29 +1,21 @@
 using System;
-using System.Collections.ObjectModel;
-using System.Linq;
 
 namespace Telegram.Bot.States;
 
-internal class ActionsProvider<TData>(
-    StateActionsCollection<TData> actionsCollection,
-    IServiceProvider serviceProvider,
-    string stateName) : IStateActionsProvider<TData>
+internal class ActionsProvider<TCtx>(string stateName,
+    IActionFactoriesCollection<TCtx>? commandFactories,
+    IActionFactoriesCollection<TCtx>? actionFactories)
+    : IStateActionsProvider<TCtx> where TCtx : StateContext
 {
-    private readonly ReadOnlyDictionary<string, StateCommandFactory<TData>> registeredCommands
-        = new(actionsCollection.Commands);
-
-    private readonly ReadOnlyCollection<StateCommandFactory<TData>> registeredActions
-        = new(actionsCollection.StateActions);
-
-    public IAsyncCommand<StateContext<TData>, IStateResult>? GetAction(ChatUpdate update, ChatState state)
+    public IStateAction<TCtx>? GetAction(TCtx context, IServiceProvider serviceProvider)
     {
-        if (update.IsCommand)
-        {
-            return registeredCommands.TryGetValue(update.Command, out var commandFactory) && commandFactory.IsApplicable(update, state)
-                ? commandFactory.Create(serviceProvider, stateName)
-                : null;
-        }
+        if (context.Update.IsCommand && commandFactories != null)
+            return commandFactories
+                .GetApplicableFactoryIfExists(context)
+                ?.Create(serviceProvider, stateName);
 
-        return registeredActions.FirstOrDefault(af => af.IsApplicable(update, state))?.Create(serviceProvider, stateName);
+        return actionFactories
+            ?.GetApplicableFactoryIfExists(context)
+            ?.Create(serviceProvider, stateName);
     }
 }

@@ -5,6 +5,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Telegram.Bot.States", "Telegram.Bot.States\Telegram.Bot.States.csproj", "{DB95327F-7E64-48B3-8887-A2F9E810750B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Telegram.Bot.States.Tests", "Telegram.Bot.States.Tests\Telegram.Bot.States.Tests.csproj", "{2CCCF6E7-6963-4032-99E5-05F4BCFADD5C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{DB95327F-7E64-48B3-8887-A2F9E810750B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DB95327F-7E64-48B3-8887-A2F9E810750B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DB95327F-7E64-48B3-8887-A2F9E810750B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2CCCF6E7-6963-4032-99E5-05F4BCFADD5C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2CCCF6E7-6963-4032-99E5-05F4BCFADD5C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2CCCF6E7-6963-4032-99E5-05F4BCFADD5C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2CCCF6E7-6963-4032-99E5-05F4BCFADD5C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
