@@ -6,6 +6,7 @@ namespace Telegram.Bot.States;
 public class BotConfiguration
 {
     public static string WebHookPath { get; set; } = "bot";
+    public static bool RegisterWebhookWhenStarted { get; set; } = true;
 
     public required string Token { get; set; }
     public required string HostAddress { get; set; }

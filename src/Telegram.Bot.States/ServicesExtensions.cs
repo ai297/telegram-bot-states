@@ -80,7 +80,8 @@ public static class ServicesExtensions
             sp.GetRequiredService<ILogger<BotSetupService>>(),
             getMenuButton));
 
-        services.AddHostedService<WebhookService>();
+        if (BotConfiguration.RegisterWebhookWhenStarted)
+            services.AddHostedService<WebhookService>();
 
         return statesConfiguration;
     }
