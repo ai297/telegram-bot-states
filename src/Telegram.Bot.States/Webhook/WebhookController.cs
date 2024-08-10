@@ -1,8 +1,10 @@
-﻿using System.Threading;
+﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
 
 namespace Telegram.Bot.States;
 
@@ -13,11 +15,16 @@ internal class WebhookController(
     ILogger<WebhookController> logger)
     : IWebhookController
 {
-    private bool isStarted = false;
+    private Lazy<WebhookInfo> webhookInfo = new(() => botClient.GetWebhookInfoAsync().GetAwaiter().GetResult());
+
+    private bool? isStarted = null;
+    public bool IsStarted => isStarted ??= !string.IsNullOrEmpty(webhookInfo.Value.Url);
+    public string CurrentUrl => webhookInfo.Value.Url;
+    public UpdateType[] AllowedUpdates => webhookInfo.Value.AllowedUpdates ?? [];
 
     public async Task Restart(bool dropUpdates, CancellationToken cancellationToken)
     {
-        if (isStarted) await Stop(dropUpdates, cancellationToken);
+        if (IsStarted) await Stop(dropUpdates, cancellationToken);
 
         await Start(dropUpdates, cancellationToken);
     }
@@ -33,6 +40,14 @@ internal class WebhookController(
         }
 
         await setupService.Setup();
+
+        if (IsStarted && !string.Equals(webhookInfo.Value.Url, config.HostAddress))
+            await Stop(dropUpdates, cancellationToken);
+        else if (IsStarted)
+        {
+            logger.LogInformation("Tg bot webhook is set already.");
+            return;
+        }
 
         var certificate = !string.IsNullOrEmpty(config.CertificatePath)
             ? new InputFileStream(System.IO.File.OpenRead(config.CertificatePath))
@@ -50,14 +65,17 @@ internal class WebhookController(
         certificate?.Content.Dispose();
 
         logger.LogInformation($"Tg bot webhook has set to '{{adress}}'.{(dropUpdates ? " Updates dropped." : "")}", webhookAddress);
+        webhookInfo = new(() => botClient.GetWebhookInfoAsync().GetAwaiter().GetResult());
         isStarted = true;
     }
 
     public async Task Stop(bool dropUpdates, CancellationToken cancellationToken)
     {
-        if (!isStarted) return;
+        if (!IsStarted) return;
 
         await botClient.DeleteWebhookAsync(dropUpdates, cancellationToken);
+        webhookInfo = new(() => botClient.GetWebhookInfoAsync().GetAwaiter().GetResult());
+        isStarted = false;
 
         logger.LogInformation($"Tg bot webhook removed.{(dropUpdates ? " Updates dropped." : "")}");
     }

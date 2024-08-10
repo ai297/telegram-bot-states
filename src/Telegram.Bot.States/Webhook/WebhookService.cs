@@ -1,10 +1,13 @@
-﻿using System.Threading;
+﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Telegram.Bot.States;
 
-internal class WebhookService(IWebhookController webhookController) : IHostedLifecycleService
+internal class WebhookService(IWebhookController webhookController, ILogger<WebhookService> logger)
+    : IHostedLifecycleService
 {
     public Task StartAsync(CancellationToken cancellationToken)
         => Task.CompletedTask;
@@ -12,9 +15,17 @@ internal class WebhookService(IWebhookController webhookController) : IHostedLif
     public Task StartingAsync(CancellationToken cancellationToken)
         => Task.CompletedTask;
 
-    public Task StartedAsync(CancellationToken cancellationToken)
-        => Task.Delay(1000, cancellationToken).ContinueWith(_
-        => webhookController.Start(dropUpdates: false, cancellationToken));
+    public async Task StartedAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await webhookController.Start(dropUpdates: true, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Webhook hasn't been set. {error}", ex.Message);
+        }
+    }
 
     public Task StopAsync(CancellationToken cancellationToken)
         => webhookController.Stop(dropUpdates: false, cancellationToken);
